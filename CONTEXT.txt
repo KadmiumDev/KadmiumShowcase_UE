@@ -1,0 +1,1512 @@
+# Project Context
+Generated: 2026-09-10 00:36
+
+## Directory Structure
+### Module: KadmiumShowcase_UE
+- `KNOWN_ISSUES.md`
+- `LICENSE.md`
+- `README.md`
+- `Aether_Showcase\Aether.uplugin`
+### Module: Aether_Showcase
+- `Aether_Showcase\Source\Aether.Build.cs`
+- `Aether_Showcase\Source\Private\Aether.cpp`
+- `Aether_Showcase\Source\Private\Components\AetherAimDirectorComponent.cpp`
+- `Aether_Showcase\Source\Private\Components\AetherGravityComponent.cpp`
+- `Aether_Showcase\Source\Private\Components\AetherLandingGearComponent.cpp`
+- `Aether_Showcase\Source\Private\Components\AetherMovementComponent.cpp`
+- `Aether_Showcase\Source\Private\Simulations\AetherSimulation.cpp`
+- `Aether_Showcase\Source\Public\Aether.h`
+- `Aether_Showcase\Source\Public\Components\AetherAimDirectorComponent.h`
+- `Aether_Showcase\Source\Public\Components\AetherGravityComponent.h`
+- `Aether_Showcase\Source\Public\Components\AetherLandingGearComponent.h`
+- `Aether_Showcase\Source\Public\Components\AetherMovementComponent.h`
+- `Aether_Showcase\Source\Public\Interface\AetherGravitySource.h`
+- `Aether_Showcase\Source\Public\Libraries\AetherTypes.h`
+- `Aether_Showcase\Source\Public\Simulations\AetherSimulation.h`
+
+## Source Code
+
+# --- MODULE: KADMIUMSHOWCASE_UE ---
+
+### File: KNOWN_ISSUES.md
+```
+## Current Prototype State & Known Technical Debt
+
+> **Note to Reviewers:** This repository represents an active prototype showcasing architecture, state isolation, and Network Prediction plugin integration. The items below are known prototype shortcuts currently queued for production hardening.
+
+### 1. Math & Floating-Point Precision
+* **Direct Float Comparisons:** Certain checks (e.g., `VerticalDot < 0.98f` or exact `0.0f` checks) are currently used in `AetherAimDirectorComponent` and simulation ticks. Production builds will replace these with UE tolerance helpers (`FMath::IsNearlyZero`, `FMath::IsNearlyEqual`) to ensure cross-platform precision consistency.
+* **Hardcoded Magic Numbers:** Operational constants (such as terminal velocity multipliers, lift curves, and dot-product thresholds) are hardcoded inline in `AetherSimulation.cpp`. These will be moved into `FAetherAuxState` and `UDataAsset` configs so designers can tweak flight characteristics without re-compiling.
+
+### 2. Network Prediction & Resimulation Overhead
+* **In-Tick Physics Traces:** `SweepSimulation` and `CalculateLandingGearForces` currently execute `ComponentSweepMulti` and `LineTraceSingleByChannel` directly within `FAetherSimulation::SimulationTick`. 
+  * *Planned Optimization:* Because NPP rolls back and re-simulates multiple frames during client reconciliation/packet loss, doing raw scene queries inside the simulation loop multiplies raycast costs. Production updates will pre-cache trace hit data prior to the rollback buffer evaluation or limit sweep ranges.
+
+### 3. Input Clamping & DPI Handling
+* **Mouse Delta Rejection:** `AetherAimDirectorComponent::AddAimInput` currently discards mouse deltas greater than `50.f` to prevent rotational snaps during long frames. 
+  * *Planned Fix:* Replace input discarding with delta clamping and frame-rate independent scaling to properly support high-DPI mice and sudden frame hitches.
+
+### 4. Component Lifecycle & Memory Safety
+* **External Reference Tracking:** `UAetherMovementComponent` currently tracks active gravity sources via `TArray<UAetherGravityComponent*>`. 
+  * *Planned Fix:* Transition external actor components to `TWeakObjectPtr<UAetherGravityComponent>` to explicitly guard against sudden actor destruction in dynamic levels (e.g., moving gravity volumes or destroyed planetoids).
+```
+
+### File: LICENSE.md
+```
+**License Terms:** see - [kadmium.dev/legal/software-source-code-license-agreement](https://www.kadmium.dev/legal/software-source-code-license-agreement) for full licens details.
+
+
+
+
+```
+
+### File: README.md
+```
+# Aether Framework — C++ Architecture Showcase
+
+Read-only code showcase for a custom Unreal Engine 5 movement implementation built on the experimental **Network Prediction** plugin.
+
+This public repository serves as a **read-only architectural audit** for technical leads and senior engineers evaluating codebase quality, memory layout, and C++ design patterns.
+
+---
+
+## Technical Overview
+
+Aether is a custom C++ movement component (`UAetherMovementComponent`) that integrates with UE5's Network Prediction Proxy (NPP) architecture to achieve deterministic client prediction and server reconciliation for multi-axis vehicle flight.
+
+### Scope of Showcase
+
+To comply with repository distribution policies, this public mirror contains the full API layout while stubbing proprietary tick math:
+
+In accordance with the **Kadmium Software & Source Code License Agreement**, the actual simulation implementation details are proprietary.
+
+* **Header Files (`.h`):** 100% complete. Contains class definitions, `UPROPERTY` setups, interface definitions, and state structs (`FAetherInputCmd`, `FAetherSyncState`, `FAetherAuxState`).
+* **Implementation Files (`.cpp`):** Class lifecycle, network proxy initialization, and function signatures are intact. Physics equations and vector transforms inside `AetherSimulation.cpp` are replaced with structural comments.
+
+---
+
+## Architecture & Data Layout
+
+### 1. Network Prediction Model (`FAetherModelDef`)
+* **State Isolation:** Separates high-frequency networking data (`FAetherSyncState`: Location, Rotation, LinearVelocity) from low-frequency property updates (`FAetherAuxState`: Mass, Thrust, Damping, Control Rates).
+* **Command Buffer (`FAetherInputCmd`):** Serializes raw 6-DOF input vectors, aim vectors, control states, and frame-local gravity forces.
+* **Reconciliation:** Custom `ShouldReconcile` thresholds for distance and angular delta tolerances to minimize correction frequency.
+
+### 2. Gravity Resolution (`UAetherGravityComponent`)
+* Supports spherical (radial distance falloff) and directional (world-space/local vector) gravity types.
+* Evaluates overlapping volumes via an explicit integer priority hierarchy (`Priority` field).
+
+### 3. Suspension Simulation
+* Raycast-based spring-damper model executed during the simulation tick (`CalculateLandingGearForces`).
+* Calculates compression, velocity-aligned damping, and leverage-arm torque to update linear and angular acceleration states.
+
+### 4. Aerodynamics & Flight State
+* Computes Angle of Attack (AOA) and G-Force telemetry per frame.
+* Density-scaled lift vectors and speed-dependent control authority scaling (aerodynamic damping vs. spaceflight coupled/decoupled modes).
+
+---
+
+## Repository Structure
+
+│─Aether_Showcase
+│  └─Source/
+│      └── Aether/
+│           ├── Public/         # Complete C++ headers and state definitions
+│           └── Private/        # Implementation stubs & network proxy bindings
+├── KNOWN_ISSUES.md         # Technical debt, prototype trade-offs, and optimization queue
+├── Aether.uplugin          # Plugin descriptor (NetworkPrediction dependency)
+└── README.md
+
+
+---
+
+## Known Trade-Offs & Technical Debt
+
+See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for details on:
+* In-tick raycasting overhead during NPP client resimulation rollbacks.
+* Direct float comparisons queued for `FMath::IsNearlyZero` refactoring.
+* Hardcoded simulation constants targeted for `UDataAsset` exposure.
+
+---
+
+## Demo & Visuals
+
+* **Playable Test Build (.exe):** *COMING SOON*
+* **Video Deep-Dive:** *COMING SOON*
+
+---
+
+## License & Contact
+
+* **License Terms:** [kadmium.dev/license](https://www.kadmium.dev/license)
+* **Author:** Emil Fredrik Sjöstedt (Kadmium)
+* **Contact:** `legal@kadmium.dev`
+
+```
+
+### File: Aether.uplugin
+```json
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0.0.7",
+	"FriendlyName": "Aether Framework",
+	"Description": "Handles Camera | Character & Vehicle Movements",
+	"Category": "Kadmium Frameworks",
+	"CreatedBy": "Kadmium",
+	"CreatedByURL": "",
+	"DocsURL": "https://www.kadmium.dev/ai-summary",
+	"MarketplaceURL": "",
+	"SupportURL": "https://www.kadmium.dev/contact-links | support@kadmium.dev",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "Aether",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "NetworkPrediction",
+			"Enabled": true,
+			"Activate": true
+		}
+	]
+}
+```
+
+
+# --- MODULE: AETHER_SHOWCASE ---
+
+### File: Aether.Build.cs
+```csharp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+
+using UnrealBuildTool;
+using UnrealBuildTool.Rules;
+
+public class Aether : ModuleRules
+{
+	public Aether(ReadOnlyTargetRules Target) : base(Target)
+	{
+		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+		
+		PublicIncludePaths.AddRange(
+			new string[] {
+
+			}
+			);
+				
+		
+		PrivateIncludePaths.AddRange(
+			new string[] {
+
+			}
+			);
+			
+		
+		PublicDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"Core",
+                "NetworkPrediction",
+                "GameplayTags"
+            }
+			);
+			
+		
+		PrivateDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"CoreUObject",
+				"Engine",
+				"Slate",
+				"SlateCore",	
+			}
+			);
+		
+		
+		DynamicallyLoadedModuleNames.AddRange(
+			new string[]
+			{
+
+			}
+			);
+	}
+}
+
+```
+
+### File: Aether.cpp
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+
+#include "Aether.h"
+
+#define LOCTEXT_NAMESPACE "FAetherModule"
+
+void FAetherModule::StartupModule()
+{
+
+}
+
+void FAetherModule::ShutdownModule()
+{
+
+}
+
+#undef LOCTEXT_NAMESPACE
+	
+IMPLEMENT_MODULE(FAetherModule, Aether)
+```
+
+### File: AetherAimDirectorComponent.cpp
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#include "Components/AetherAimDirectorComponent.h"
+#include "Components/AetherMovementComponent.h"
+#include "Components/SceneComponent.h"
+
+// -----------------------
+// Lifecycle
+// -----------------------
+
+UAetherAimDirectorComponent::UAetherAimDirectorComponent()
+{
+    PrimaryComponentTick.bCanEverTick = true;
+    PrimaryComponentTick.bStartWithTickEnabled = true;
+}
+
+void UAetherAimDirectorComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    FVector CamForward = CurrentAimRotation.GetForwardVector();
+    float VerticalDot = FMath::Abs(FVector::DotProduct(CamForward, FVector::UpVector));
+
+    if (VerticalDot < 0.98f)
+    {
+        FVector FlatRight = FVector::CrossProduct(FVector::UpVector, CamForward).GetSafeNormal();
+        if (!FlatRight.IsNearlyZero())
+        {
+            FQuat LeveledRotation = FRotationMatrix::MakeFromXY(CamForward, FlatRight).ToQuat();
+            float PitchAlpha = 1.0f - VerticalDot;
+            float SmoothSpeed = 4.0f * PitchAlpha;
+            float InterpAlpha = 1.0f - FMath::Exp(-SmoothSpeed * DeltaTime);
+            CurrentAimRotation = FQuat::Slerp(CurrentAimRotation, LeveledRotation, InterpAlpha);
+        }
+    }
+
+    if (CameraComponent.IsValid())
+    {
+        CameraComponent->SetWorldRotation(CurrentAimRotation);
+    }
+
+    if (MovementComponent.IsValid())
+    {
+        MovementComponent->SetAimDirection(CurrentAimRotation.GetForwardVector());
+    }
+}
+
+// -----------------------
+// Aim Management
+// -----------------------
+
+void UAetherAimDirectorComponent::InitializeAimDirector(UAetherMovementComponent* InMovementComponent, USceneComponent* InCameraComponent, USceneComponent* InVisualMesh)
+{
+    MovementComponent = InMovementComponent;
+    CameraComponent = InCameraComponent;
+
+    if (InVisualMesh)
+    {
+        FVector MeshForward = InVisualMesh->GetForwardVector();
+        CurrentAimRotation = FRotationMatrix::MakeFromXZ(MeshForward, FVector::UpVector).ToQuat();
+    }
+    else if (CameraComponent.IsValid())
+    {
+        CurrentAimRotation = CameraComponent->GetComponentQuat();
+    }
+}
+
+void UAetherAimDirectorComponent::AddAimInput(FVector2D MouseDelta)
+{
+    if (FMath::Abs(MouseDelta.X) > 50.f || FMath::Abs(MouseDelta.Y) > 50.f)
+    {
+        return;
+    }
+
+    if (MouseDelta.Y != 0.f)
+    {
+        FQuat PitchQuat(FVector::RightVector, FMath::DegreesToRadians(MouseDelta.Y));
+        CurrentAimRotation = (CurrentAimRotation * PitchQuat).GetNormalized();
+    }
+
+    if (MouseDelta.X != 0.f)
+    {
+        FQuat YawQuat(FVector::UpVector, FMath::DegreesToRadians(MouseDelta.X));
+        CurrentAimRotation = (YawQuat * CurrentAimRotation).GetNormalized();
+    }
+}
+```
+
+### File: AetherGravityComponent.cpp
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#include "Components/AetherGravityComponent.h"
+#include "GameFramework/Actor.h"
+
+// -----------------------
+// Lifecycle
+// -----------------------
+
+UAetherGravityComponent::UAetherGravityComponent()
+{
+    PrimaryComponentTick.bCanEverTick = false;
+}
+
+// -----------------------
+// Gravity Logic
+// -----------------------
+
+FVector UAetherGravityComponent::GetGravityForceAtLocation(FVector TargetLocation) const
+{
+    AActor* Owner = GetOwner();
+    if (!Owner) return FVector::ZeroVector;
+
+    if (GravityType == EAetherGravityType::Spherical)
+    {
+        FVector CenterLocation = Owner->GetActorLocation();
+        FVector DirectionToCenter = (CenterLocation - TargetLocation).GetSafeNormal();
+        float Distance = FVector::Distance(CenterLocation, TargetLocation);
+        float Alpha = 1.0f - FMath::Clamp((Distance - InnerRadius) / FMath::Max(1.0f, OuterRadius - InnerRadius), 0.0f, 1.0f);
+        return DirectionToCenter * (MaxGravityStrength * Alpha);
+    }
+    else if (GravityType == EAetherGravityType::Directional)
+    {
+        FVector WorldGravityDir = Owner->GetActorQuat().RotateVector(LocalGravityDirection).GetSafeNormal();
+        return WorldGravityDir * MaxGravityStrength;
+    }
+
+    return FVector::ZeroVector;
+}
+```
+
+### File: AetherLandingGearComponent.cpp
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#include "Components/AetherLandingGearComponent.h"
+
+// -----------------------
+// Lifecycle
+// -----------------------
+
+UAetherLandingGearComponent::UAetherLandingGearComponent()
+{
+    PrimaryComponentTick.bCanEverTick = false;
+}
+
+// -----------------------
+// Gear State Management
+// -----------------------
+
+void UAetherLandingGearComponent::SetGearDeployed(bool bDeploy)
+{
+    bIsDeployed = bDeploy;
+}
+
+void UAetherLandingGearComponent::ToggleGearDeployed()
+{
+    bIsDeployed = !bIsDeployed;
+}
+```
+
+### File: AetherMovementComponent.cpp
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+// PUBLIC SHOWCASE VERSION - PROPRIETARY LOGIC REMOVED
+
+#include "Components/AetherMovementComponent.h"
+#include "Components/AetherGravityComponent.h"
+#include "Components/AetherLandingGearComponent.h"
+#include "NetworkPredictionProxyInit.h"
+#include "NetworkPredictionProxyWrite.h"
+#include "NetworkPredictionModelDefRegistry.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "Engine/HitResult.h"
+
+#if WITH_EDITOR
+#include "DrawDebugHelpers.h"
+static TAutoConsoleVariable<int32> CVarAetherDebug(
+    TEXT("Aether.ToggleDebug"),
+    0,
+    TEXT("Draws 3D floating text and lines for Aether Movement.\n0: Off, 1: On"),
+    ECVF_Cheat);
+#endif
+
+NP_MODEL_REGISTER(FAetherModelDef);
+
+// -----------------------
+// Lifecycle
+// -----------------------
+
+UAetherMovementComponent::UAetherMovementComponent()
+{
+    bWantsInitializeComponent = true;
+    bAutoActivate = true;
+    SetIsReplicatedByDefault(true);
+
+#if WITH_EDITOR
+    PrimaryComponentTick.bCanEverTick = true;
+    PrimaryComponentTick.bStartWithTickEnabled = true;
+#else
+    PrimaryComponentTick.bCanEverTick = false;
+    PrimaryComponentTick.bStartWithTickEnabled = false;
+#endif
+}
+
+void UAetherMovementComponent::InitializeComponent()
+{
+    UpdatedComponent = GetOwner()->GetRootComponent();
+    Super::InitializeComponent();
+}
+
+void UAetherMovementComponent::BeginPlay()
+{
+    Super::BeginPlay();
+
+    if (AActor* Owner = GetOwner())
+    {
+        FVector StartLoc = Owner->GetActorLocation();
+        FQuat StartRot = Owner->GetActorQuat();
+
+        auto SnapState = [StartLoc, StartRot](FAetherSyncState& Sync)
+            {
+                Sync.Location = StartLoc;
+                Sync.Rotation = StartRot;
+                Sync.LinearVelocity = FVector::ZeroVector;
+            };
+
+        NetworkPredictionProxy.WriteSyncState<FAetherSyncState>(SnapState, "BeginPlay_Snap");
+        NetworkPredictionProxy.WritePresentationSyncState<FAetherSyncState>(SnapState, "BeginPlay_Pres");
+        NetworkPredictionProxy.WritePrevPresentationSyncState<FAetherSyncState>(SnapState, "BeginPlay_PrevPres");
+
+        TArray<UAetherLandingGearComponent*> FoundGears;
+        Owner->GetComponents<UAetherLandingGearComponent>(FoundGears);
+        for (UAetherLandingGearComponent* Gear : FoundGears)
+        {
+            RegisterLandingGear(Gear);
+        }
+    }
+
+    if (VisualComponent)
+    {
+        VisualComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+    }
+}
+
+#if WITH_EDITOR
+void UAetherMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    if (CVarAetherDebug.GetValueOnGameThread() > 0 && GetOwner())
+    {
+        const FAetherSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FAetherSyncState>();
+        const FAetherAuxState* Aux = NetworkPredictionProxy.ReadAuxState<FAetherAuxState>();
+        const FAetherInputCmd* Cmd = NetworkPredictionProxy.ReadInputCmd<FAetherInputCmd>();
+
+        if (!Sync || !Aux) return;
+
+        FVector ActorLoc = GetOwner()->GetActorLocation();
+        FVector NPLoc = Sync->Location;
+        FString PosDebug = FString::Printf(TEXT("ACTOR LOCATION: %s\nNPP LOCATION:   %s"), *ActorLoc.ToString(), *NPLoc.ToString());
+
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(1337, 0.f, FColor::Yellow, PosDebug, true, FVector2D(1.5f, 1.5f));
+        }
+
+        FVector StartLoc = GetOwner()->GetActorLocation();
+        FString RoleStr = GetOwner()->HasAuthority() ?
+            TEXT("SERVER") :
+            (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy ? TEXT("CLIENT (Controlling)") : TEXT("CLIENT (Ghost)"));
+
+        FString DebugText = FString::Printf(TEXT("=== AETHER MOVEMENT [%s] ===\n"), *RoleStr);
+        DebugText += FString::Printf(TEXT("Speed: %.0f / %.0f\n"), Sync->LinearVelocity.Size(), Aux->MaxSpeed);
+
+        if (Cmd)
+        {
+            DebugText += FString::Printf(TEXT("Input Lin: X=%.2f Y=%.2f Z=%.2f\n"), Cmd->ForwardCmd, Cmd->RightCmd, Cmd->UpCmd);
+            DebugText += FString::Printf(TEXT("Input Ang: P=%.2f Y=%.2f R=%.2f\n"), Cmd->PitchCmd, Cmd->YawCmd, Cmd->RollCmd);
+            if (CurrentControlScheme == EAetherControlScheme::MouseAim && !Cmd->AimDirection.IsNearlyZero())
+            {
+                FVector TraceEnd = StartLoc + (Cmd->AimDirection * 5000.f);
+                DrawDebugLine(GetWorld(), StartLoc, TraceEnd, FColor::Red, false, -1.f, 0, 2.f);
+                DrawDebugSphere(GetWorld(), TraceEnd, 50.f, 8, FColor::Orange, false, -1.f, 0, 2.f);
+            }
+        }
+
+        DrawDebugString(GetWorld(), StartLoc + FVector(0, 0, 200.f), DebugText, nullptr, FColor::Cyan, 0.f, true, 1.2f);
+        if (!Sync->LinearVelocity.IsNearlyZero())
+        {
+            DrawDebugDirectionalArrow(GetWorld(), StartLoc, StartLoc + (Sync->LinearVelocity * 0.5f), 100.f, FColor::Green, false, -1.f, 0, 5.f);
+        }
+    }
+}
+#endif
+
+// -----------------------
+// Component Configuration
+// -----------------------
+
+void UAetherMovementComponent::SetVisualComponent(USceneComponent* InVisualComponent)
+{
+    VisualComponent = InVisualComponent;
+    if (VisualComponent && UpdatedComponent)
+    {
+        VisualComponent->SetWorldLocation(UpdatedComponent->GetComponentLocation());
+        VisualComponent->SetWorldRotation(UpdatedComponent->GetComponentRotation());
+    }
+}
+
+// -----------------------
+// Input Handling
+// -----------------------
+
+void UAetherMovementComponent::SetForwardInput(float Value) { RawLinearInput.X = Value; }
+void UAetherMovementComponent::SetRightInput(float Value) { RawLinearInput.Y = Value; }
+void UAetherMovementComponent::SetUpInput(float Value) { RawLinearInput.Z = Value; }
+void UAetherMovementComponent::SetRollInput(float Value) { RawAngularInput.X = Value; }
+void UAetherMovementComponent::SetPitchInput(float Value) { RawAngularInput.Y = Value; }
+void UAetherMovementComponent::SetYawInput(float Value) { RawAngularInput.Z = Value; }
+
+void UAetherMovementComponent::ToggleCoupledMode()
+{
+    bIsCoupledMode = !bIsCoupledMode;
+}
+
+void UAetherMovementComponent::ToggleLandingGear()
+{
+    bInputLandingGear = !bInputLandingGear;
+}
+
+void UAetherMovementComponent::SetAimDirection(FVector InAimDirection)
+{
+    CurrentAimDirection = InAimDirection;
+}
+
+// -----------------------
+// Gravity Management
+// -----------------------
+
+void UAetherMovementComponent::AddGravitySource(UAetherGravityComponent* GravitySource)
+{
+    if (GravitySource && !ActiveGravitySources.Contains(GravitySource))
+    {
+        ActiveGravitySources.Add(GravitySource);
+    }
+}
+
+void UAetherMovementComponent::RemoveGravitySource(UAetherGravityComponent* GravitySource)
+{
+    if (GravitySource)
+    {
+        ActiveGravitySources.RemoveSingleSwap(GravitySource);
+    }
+}
+
+// -----------------------
+// Landing Gear System
+// -----------------------
+
+void UAetherMovementComponent::RegisterLandingGear(UAetherLandingGearComponent* Gear)
+{
+    if (Gear && !ActiveLandingGears.Contains(Gear))
+    {
+        ActiveLandingGears.Add(Gear);
+    }
+}
+
+void UAetherMovementComponent::CalculateLandingGearForces(const FAetherSyncState* Sync, const FAetherAuxState* Aux, float DeltaTime, FVector& OutLinearForce, FVector& OutAngularAcceleration) const
+{
+    // [PROPRIETARY LOGIC REMOVED]
+    // The commercial version performs line traces per active gear, calculating:
+    // 1. Compression ratio & non-linear spring stiffness (cubic progressive multiplier).
+    // 2. Axis velocity damping curves & G-Force clamping limits.
+    // 3. Lateral and cross ground friction based on landing gear mode (Rolling vs Sticky).
+    // 4. Lever arm cross products to generate angular torque acceleration.
+
+    OutLinearForce = FVector::ZeroVector;
+    OutAngularAcceleration = FVector::ZeroVector;
+}
+
+// -----------------------
+// Mechanics & Simulation
+// -----------------------
+
+FVector UAetherMovementComponent::SweepSimulation(FVector Start, FVector DesiredEnd, FQuat Rotation, FHitResult& OutHit) const
+{
+    // [PROPRIETARY LOGIC REMOVED]
+    // The commercial version executes multi-sweep component tracing, evaluating
+    // blocking hits, initial penetration depth extraction, and impact normal offsets.
+
+    return DesiredEnd;
+}
+
+void UAetherMovementComponent::TeleportTo(FVector NewLocation, FRotator NewRotation)
+{
+    if (UpdatedComponent)
+    {
+        UpdatedComponent->SetWorldLocationAndRotation(NewLocation, NewRotation, false, nullptr, ETeleportType::TeleportPhysics);
+    }
+
+    if (VisualComponent)
+    {
+        VisualComponent->SetWorldLocationAndRotation(NewLocation, NewRotation, false, nullptr, ETeleportType::TeleportPhysics);
+    }
+
+    ActiveGravitySources.Empty();
+    if (UPrimitiveComponent* PrimComp = Cast<UPrimitiveComponent>(UpdatedComponent))
+    {
+        PrimComp->UpdateOverlaps();
+        TArray<AActor*> OverlappingActors;
+        PrimComp->GetOverlappingActors(OverlappingActors);
+
+        for (AActor* OverlapActor : OverlappingActors)
+        {
+            if (UAetherGravityComponent* GravSource = OverlapActor->FindComponentByClass<UAetherGravityComponent>())
+            {
+                ActiveGravitySources.AddUnique(GravSource);
+            }
+        }
+    }
+
+    auto SnapState = [&](FAetherSyncState& Sync)
+        {
+            Sync.Location = NewLocation;
+            Sync.Rotation = NewRotation.Quaternion();
+            Sync.LinearVelocity = FVector::ZeroVector;
+        };
+
+    NetworkPredictionProxy.WriteSyncState<FAetherSyncState>(SnapState, "Teleport");
+    NetworkPredictionProxy.WritePresentationSyncState<FAetherSyncState>(SnapState, "Teleport_Pres");
+    NetworkPredictionProxy.WritePrevPresentationSyncState<FAetherSyncState>(SnapState, "Teleport_PrevPres");
+}
+
+// -----------------------
+// Network Prediction Proxy (NPP) Hooks
+// -----------------------
+
+void UAetherMovementComponent::InitializeNetworkPredictionProxy()
+{
+    ActiveSimulation = MakeUnique<FAetherSimulation>();
+    ActiveSimulation->Driver = this;
+    NetworkPredictionProxy.Init<FAetherModelDef>(GetWorld(), GetReplicationProxies(), ActiveSimulation.Get(), this);
+}
+
+void UAetherMovementComponent::InitializeSimulationState(FAetherSyncState* Sync, FAetherAuxState* Aux)
+{
+    if (AActor* Owner = GetOwner())
+    {
+        Sync->Location = Owner->GetActorLocation();
+        Sync->Rotation = Owner->GetActorQuat();
+        Sync->LinearVelocity = FVector::ZeroVector;
+    }
+
+    if (Aux)
+    {
+        Aux->Mass = Mass;
+        Aux->MaxForwardThrust = MaxForwardThrust;
+        Aux->MaxReverseThrust = MaxReverseThrust;
+        Aux->MaxStrafeThrust = MaxStrafeThrust;
+        Aux->MaxSpeed = MaxSpeed;
+        Aux->LinearDampingBase = LinearDampingBase;
+        Aux->PitchRate = PitchRate;
+        Aux->YawRate = YawRate;
+        Aux->RollRate = RollRate;
+        Aux->RollInfluence = RollInfluence;
+    }
+}
+
+void UAetherMovementComponent::ProduceInput(const int32 DeltaTimeMS, FAetherInputCmd* Cmd)
+{
+    FVector ClampedLinear = RawLinearInput.GetClampedToMaxSize(1.0f);
+    Cmd->ForwardCmd = ClampedLinear.X;
+    Cmd->RightCmd = ClampedLinear.Y;
+    Cmd->UpCmd = ClampedLinear.Z;
+    Cmd->bIsCoupledMode = this->bIsCoupledMode;
+    Cmd->bWantsLandingGear = this->bInputLandingGear;
+
+    if (CurrentControlScheme == EAetherControlScheme::DirectAxis)
+    {
+        Cmd->PitchCmd = FMath::Clamp(RawAngularInput.Y, -1.f, 1.f);
+        Cmd->YawCmd = FMath::Clamp(RawAngularInput.Z, -1.f, 1.f);
+        Cmd->RollCmd = FMath::Clamp(RawAngularInput.X, -1.f, 1.f);
+        Cmd->AimDirection = FVector::ZeroVector;
+    }
+    else if (CurrentControlScheme == EAetherControlScheme::MouseAim)
+    {
+        Cmd->AimDirection = CurrentAimDirection;
+        Cmd->PitchCmd = FMath::Clamp(RawAngularInput.Y, -1.f, 1.f);
+        Cmd->YawCmd = FMath::Clamp(RawAngularInput.Z, -1.f, 1.f);
+        Cmd->RollCmd = FMath::Clamp(RawAngularInput.X, -1.f, 1.f);
+    }
+
+    Cmd->GravityForce = FVector::ZeroVector;
+    Cmd->EnvironmentDensity = 1.0f;
+}
+
+void UAetherMovementComponent::FinalizeFrame(const FAetherSyncState* Sync, const FAetherAuxState* Aux)
+{
+    if (AActor* Owner = GetOwner())
+    {
+        Owner->SetActorLocationAndRotation(Sync->Location, Sync->Rotation);
+    }
+
+    for (UAetherLandingGearComponent* Gear : ActiveLandingGears)
+    {
+        if (Gear) Gear->SetGearDeployed(Sync->bLandingGearDeployed);
+    }
+}
+
+void UAetherMovementComponent::RestoreFrame(const FAetherSyncState* Sync, const FAetherAuxState* Aux)
+{
+    if (AActor* Owner = GetOwner())
+        Owner->SetActorLocationAndRotation(Sync->Location, Sync->Rotation);
+}
+
+void UAetherMovementComponent::FinalizeSmoothingFrame(const FAetherSyncState* Sync, const FAetherAuxState* Aux)
+{
+    if (VisualComponent)
+    {
+        VisualComponent->SetWorldLocationAndRotation(Sync->Location, Sync->Rotation);
+    }
+
+    for (UAetherLandingGearComponent* Gear : ActiveLandingGears)
+    {
+        if (Gear) Gear->SetGearDeployed(Sync->bLandingGearDeployed);
+    }
+}
+
+// -----------------------
+// Statistics & State Getters
+// -----------------------
+
+
+// ---------------------------------------------------------------------------------
+// Shameless plug - Flux Framework 
+// (BindStatToProperty) > TargetComponent->GetClass()->FindPropertyByName(PropertyName)
+// (NotifyStatChanged) > PropertyPtr->ContainerPtrToValuePtr<float>(TargetComp)
+// 
+// Synchronizes movement parameters with external systems (e.g., FluxStatComponent).
+// When Flux modifies stats via C++ Reflection, this pushes the updated values 
+// into Network Prediction's FAetherAuxState for client/server reconciliation.
+// 
+// ---------------------------------------------------------------------------------
+
+void UAetherMovementComponent::RefreshNetworkedStats()
+{
+    if (!GetOwner()->HasAuthority())
+    {
+        return;
+    }
+
+    const FAetherAuxState* CurrentAux = NetworkPredictionProxy.ReadAuxState<FAetherAuxState>();
+    if (!CurrentAux) return;
+
+    if (CurrentAux->Mass != Mass ||
+        CurrentAux->MaxForwardThrust != MaxForwardThrust ||
+        CurrentAux->MaxReverseThrust != MaxReverseThrust ||
+        CurrentAux->MaxStrafeThrust != MaxStrafeThrust ||
+        CurrentAux->MaxSpeed != MaxSpeed ||
+        CurrentAux->LinearDampingBase != LinearDampingBase ||
+        CurrentAux->PitchRate != PitchRate ||
+        CurrentAux->YawRate != YawRate ||
+        CurrentAux->RollRate != RollRate ||
+        CurrentAux->RollInfluence != RollInfluence ||
+        CurrentAux->DiveSpeedMultiplier != DiveSpeedMultiplier)
+    {
+        NetworkPredictionProxy.WriteAuxState<FAetherAuxState>([this](FAetherAuxState& Aux)
+            {
+                Aux.Mass = this->Mass;
+                Aux.MaxForwardThrust = this->MaxForwardThrust;
+                Aux.MaxReverseThrust = this->MaxReverseThrust;
+                Aux.MaxStrafeThrust = this->MaxStrafeThrust;
+                Aux.MaxSpeed = this->MaxSpeed;
+                Aux.LinearDampingBase = this->LinearDampingBase;
+                Aux.PitchRate = this->PitchRate;
+                Aux.YawRate = this->YawRate;
+                Aux.RollRate = this->RollRate;
+                Aux.RollInfluence = this->RollInfluence;
+                Aux.DiveSpeedMultiplier = this->DiveSpeedMultiplier;
+            }, "Flux_Stat_Update");  // Context tag tracing updates originating from the Flux Stat system.
+    
+    }
+}
+
+FRotator UAetherMovementComponent::GetMouseTargetRelativeRotation() const
+{
+    const FAetherSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FAetherSyncState>();
+    if (!Sync || CurrentAimDirection.IsNearlyZero()) return FRotator::ZeroRotator;
+
+    FVector LocalDirToTarget = Sync->Rotation.Inverse().RotateVector(CurrentAimDirection);
+    return LocalDirToTarget.Rotation();
+}
+
+const FAetherSyncState* UAetherMovementComponent::GetSyncState() const
+{
+    return NetworkPredictionProxy.ReadSyncState<FAetherSyncState>();
+}
+
+const FAetherAuxState* UAetherMovementComponent::GetAuxState() const
+{
+    return NetworkPredictionProxy.ReadAuxState<FAetherAuxState>();
+}
+```
+
+### File: AetherSimulation.cpp
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+// PUBLIC SHOWCASE VERSION - PROPRIETARY LOGIC REMOVED
+
+#include "Simulations/AetherSimulation.h"
+#include "Engine/HitResult.h"
+#include "Components/AetherMovementComponent.h"
+
+// -----------------------
+// Core Simulation
+// -----------------------
+void FAetherSimulation::SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FAetherModelDef::StateTypes>& Input, const TNetSimOutput<FAetherModelDef::StateTypes>& Output)
+{
+    // [PROPRIETARY SIMULATION LOGIC EXCLUDED]
+    // 
+    // The commercial build executes the following in this tick:
+    // 1. Applies coupled/decoupled damping based on environmental density.
+    // 2. Calculates lift, terminal velocity bonuses, and dive speed multipliers.
+    // 3. Evaluates active gravity sources and applies rotational alignment.
+    // 4. Invokes Driver->CalculateLandingGearForces for 3D suspension physics.
+    // 5. Executes safe SweepSimulations to handle high-speed collisions and deflections.
+    // 6. Calculates G-Force and Angle of Attack (AOA) for UI and gameplay telemetry.
+
+}
+```
+
+### File: Aether.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+
+#pragma once
+
+#include "Modules/ModuleManager.h"
+
+class FAetherModule : public IModuleInterface
+{
+public:
+
+	/** IModuleInterface implementation */
+	virtual void StartupModule() override;
+	virtual void ShutdownModule() override;
+};
+
+```
+
+### File: AetherAimDirectorComponent.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "AetherAimDirectorComponent.generated.h"
+
+class UAetherMovementComponent;
+
+UCLASS(ClassGroup = (Aether), meta = (BlueprintSpawnableComponent))
+class AETHER_API UAetherAimDirectorComponent : public UActorComponent
+{
+    GENERATED_BODY()
+
+public:
+    // -----------------------
+    // Lifecycle
+    // -----------------------
+    UAetherAimDirectorComponent();
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+    // -----------------------
+    // Aim Management
+    // -----------------------
+    UFUNCTION(BlueprintCallable, Category = "Aether|Aim")
+    void InitializeAimDirector(UAetherMovementComponent* InMovementComponent, USceneComponent* InCameraComponent, USceneComponent* InVisualMesh);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Aim")
+    void AddAimInput(FVector2D MouseDelta);
+
+private:
+    // -----------------------
+    // Internal State
+    // -----------------------
+    UPROPERTY()
+    FQuat CurrentAimRotation;
+
+    TWeakObjectPtr<UAetherMovementComponent> MovementComponent;
+    TWeakObjectPtr<USceneComponent> CameraComponent;
+};
+```
+
+### File: AetherGravityComponent.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
+#include "AetherGravityComponent.generated.h"
+
+UENUM(BlueprintType)
+enum class EAetherGravityType : uint8
+{
+    Spherical   UMETA(DisplayName = "Planet (Spherical Falloff)"),
+    Directional UMETA(DisplayName = "Hangar (Directional)")
+};
+
+UCLASS(ClassGroup = (Aether), meta = (BlueprintSpawnableComponent))
+class AETHER_API UAetherGravityComponent : public UActorComponent
+{
+    GENERATED_BODY()
+
+public:
+    // -----------------------
+    // Lifecycle
+    // -----------------------
+    UAetherGravityComponent();
+
+    // -----------------------
+    // Gravity Logic
+    // -----------------------
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Aether|Gravity")
+    FVector GetGravityForceAtLocation(FVector TargetLocation) const;
+
+    // -----------------------
+    // Configuration Properties
+    // -----------------------
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity|System")
+    int32 Priority = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity|System")
+    FGameplayTagContainer GravityTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity")
+    EAetherGravityType GravityType = EAetherGravityType::Spherical;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity")
+    float MaxGravityStrength = 980.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity")
+    float AtmosphereDensity = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity|Spherical")
+    float InnerRadius = 5000.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity|Spherical")
+    float OuterRadius = 15000.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Gravity|Directional")
+    FVector LocalGravityDirection = FVector(0.f, 0.f, -1.f);
+};
+```
+
+### File: AetherLandingGearComponent.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/SceneComponent.h"
+#include "AetherLandingGearComponent.generated.h"
+
+UENUM(BlueprintType)
+enum class EAetherLandingGearMode : uint8
+{
+    Sticky  UMETA(DisplayName = "Magnetic / Sticky "),
+    Rolling UMETA(DisplayName = "Rolling ")
+};
+
+UCLASS(ClassGroup = (Aether), meta = (BlueprintSpawnableComponent))
+class AETHER_API UAetherLandingGearComponent : public USceneComponent
+{
+    GENERATED_BODY()
+
+public:
+    // -----------------------
+    // Lifecycle
+    // -----------------------
+    UAetherLandingGearComponent();
+
+    // -----------------------
+    // Gear State Management
+    // -----------------------
+    UFUNCTION(BlueprintCallable, Category = "Aether|Landing Gear")
+    void SetGearDeployed(bool bDeploy);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Landing Gear")
+    void ToggleGearDeployed();
+
+    UFUNCTION(BlueprintPure, Category = "Aether|Landing Gear")
+    bool IsGearDeployed() const { return bIsDeployed; }
+
+    // -----------------------
+    // Configuration Properties
+    // -----------------------
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Landing Gear")
+    bool bIsDeployed = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Landing Gear")
+    EAetherLandingGearMode GearMode = EAetherLandingGearMode::Rolling;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Landing Gear")
+    float SuspensionLength = 100.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Landing Gear")
+    float SpringFrequency = 2.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Landing Gear")
+    float DampingRatio = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Landing Gear")
+    float MaxSuspensionGs = 3.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Landing Gear")
+    float GroundFriction = 10.f;
+};
+```
+
+### File: AetherMovementComponent.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "NetworkPredictionComponent.h"
+#include "Simulations/AetherSimulation.h"
+#include "Engine/HitResult.h"
+#include "AetherMovementComponent.generated.h"
+
+UENUM(BlueprintType)
+enum class EAetherControlScheme : uint8
+{
+    DirectAxis  UMETA(DisplayName = "Direct Input"),
+    MouseAim    UMETA(DisplayName = "Follow target")
+};
+
+class UAetherLandingGearComponent;
+
+UCLASS(BlueprintType, meta = (BlueprintSpawnableComponent))
+class AETHER_API UAetherMovementComponent : public UNetworkPredictionComponent
+{
+    GENERATED_BODY()
+
+public:
+    // -----------------------
+    // Lifecycle
+    // -----------------------
+    UAetherMovementComponent();
+    virtual void InitializeComponent() override;
+    virtual void BeginPlay() override;
+#if WITH_EDITOR
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+#endif
+
+    // -----------------------
+    // Component Configuration
+    // -----------------------
+    UPROPERTY(Transient)
+    USceneComponent* UpdatedComponent;
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Components")
+    void SetVisualComponent(USceneComponent* InVisualComponent);
+
+    // -----------------------
+    // Input Handling
+    // -----------------------
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void SetForwardInput(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void SetRightInput(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void SetUpInput(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void SetPitchInput(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void SetYawInput(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void SetRollInput(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void ToggleCoupledMode();
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void ToggleLandingGear();
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Input")
+    void SetAimDirection(FVector InAimDirection);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Control")
+    EAetherControlScheme CurrentControlScheme = EAetherControlScheme::MouseAim;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Control")
+    bool bIsCoupledMode = true;
+
+    // -----------------------
+    // Gravity Management
+    // -----------------------
+    UFUNCTION(BlueprintCallable, Category = "Aether|Gravity")
+    void AddGravitySource(UAetherGravityComponent* GravitySource);
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Gravity")
+    void RemoveGravitySource(UAetherGravityComponent* GravitySource);
+
+    // -----------------------
+    // Landing Gear System
+    // -----------------------
+    UFUNCTION(BlueprintCallable, Category = "Aether|Landing Gear")
+    void RegisterLandingGear(UAetherLandingGearComponent* Gear);
+
+    void CalculateLandingGearForces(const FAetherSyncState* Sync, const FAetherAuxState* Aux, float DeltaTime, FVector& OutLinearForce, FVector& OutAngularAcceleration) const;
+
+    // -----------------------
+    // Mechanics & Simulation
+    // -----------------------
+    FVector SweepSimulation(FVector Start, FVector DesiredEnd, FQuat Rotation, FHitResult& OutHit) const;
+
+    UFUNCTION(BlueprintCallable, Category = "Aether|Movement")
+    void TeleportTo(FVector NewLocation, FRotator NewRotation);
+
+    // -----------------------
+    // Network Prediction Proxy (NPP) Hooks
+    // -----------------------
+    void InitializeSimulationState(FAetherSyncState* Sync, FAetherAuxState* Aux);
+    void ProduceInput(const int32 DeltaTimeMS, FAetherInputCmd* Cmd);
+    void FinalizeFrame(const FAetherSyncState* Sync, const FAetherAuxState* Aux);
+    void FinalizeSmoothingFrame(const FAetherSyncState* Sync, const FAetherAuxState* Aux);
+    void RestoreFrame(const FAetherSyncState* Sync, const FAetherAuxState* Aux);
+
+    // -----------------------
+    // Statistics & State Getters
+    // -----------------------
+    UFUNCTION(BlueprintCallable, Category = "Aether|Stats")
+    void RefreshNetworkedStats();
+
+    const FAetherSyncState* GetSyncState() const;
+    const FAetherAuxState* GetAuxState() const;
+
+    UFUNCTION(BlueprintPure, Category = "Aether|UI")
+    FRotator GetMouseTargetRelativeRotation() const;
+
+    // -----------------------
+    // Core Movement Stats
+    // -----------------------
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float Mass = 1000.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float MaxForwardThrust = 200.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float MaxReverseThrust = 50.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float MaxStrafeThrust = 25.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float MaxSpeed = 5000.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float LinearDampingBase = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float DiveSpeedMultiplier = 1.5f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float PitchRate = 90.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float YawRate = 45.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float RollRate = 120.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aether|Stats")
+    float RollInfluence = 1.0f;
+
+protected:
+    virtual void InitializeNetworkPredictionProxy() override;
+
+    UPROPERTY(BlueprintReadWrite, Category = "Aether|Input")
+    bool bInputLandingGear = true;
+
+private:
+    // -----------------------
+    // Internal Variables
+    // -----------------------
+    FVector RawLinearInput;
+    FVector RawAngularInput;
+    FVector CurrentAimDirection = FVector::ForwardVector;
+    TUniquePtr<FAetherSimulation> ActiveSimulation;
+
+    UPROPERTY()
+    USceneComponent* VisualComponent;
+
+    UPROPERTY()
+    TArray<UAetherGravityComponent*> ActiveGravitySources;
+
+    UPROPERTY()
+    TArray<UAetherLandingGearComponent*> ActiveLandingGears;
+};
+```
+
+### File: AetherGravitySource.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/Interface.h"
+#include "AetherGravitySource.generated.h"
+
+UINTERFACE(MinimalAPI, BlueprintType)
+class UAetherGravitySource : public UInterface
+{
+    GENERATED_BODY()
+};
+
+class AETHER_API IAetherGravitySource
+{
+    GENERATED_BODY()
+
+public:
+    UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Aether|Gravity")
+    FVector GetGravityForceAtLocation(FVector TargetLocation);
+};
+```
+
+### File: AetherTypes.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#pragma once
+
+#include "CoreMinimal.h"
+#include "NetworkPredictionStateTypes.h"
+#include "NetworkPredictionReplicationProxy.h"
+
+struct FAetherInputCmd
+{
+    float ForwardCmd = 0.f;
+    float RightCmd = 0.f;
+    float UpCmd = 0.f;
+
+    float PitchCmd = 0.f;
+    float YawCmd = 0.f;
+    float RollCmd = 0.f;
+
+    FVector AimDirection = FVector::ForwardVector;
+    bool bIsCoupledMode = true;
+    bool bWantsLandingGear = true;
+    FVector GravityForce = FVector::ZeroVector;
+    float EnvironmentDensity = 0.0f;
+
+    void NetSerialize(const FNetSerializeParams& P)
+    {
+        P.Ar << ForwardCmd; P.Ar << RightCmd; P.Ar << UpCmd;
+        P.Ar << PitchCmd; P.Ar << YawCmd; P.Ar << RollCmd;
+        P.Ar << AimDirection;
+        P.Ar << bIsCoupledMode;
+        P.Ar << bWantsLandingGear;
+        P.Ar << GravityForce;
+        P.Ar << EnvironmentDensity;
+    }
+
+    void ToString(FAnsiStringBuilderBase& Builder) const
+    {
+        Builder.Appendf("Lin:(%.1f, %.1f, %.1f) Ang:(%.1f, %.1f, %.1f) AimDir:(%.2f, %.2f, %.2f) Grav:(%.2f, %.2f, %.2f) Dens: %.2f",
+            ForwardCmd, RightCmd, UpCmd, PitchCmd, YawCmd, RollCmd,
+            AimDirection.X, AimDirection.Y, AimDirection.Z,
+            GravityForce.X, GravityForce.Y, GravityForce.Z,
+            EnvironmentDensity);
+    }
+};
+
+
+struct FAetherSyncState
+{
+    FVector Location = FVector::ZeroVector;
+    FQuat Rotation = FQuat::Identity;
+    FVector LinearVelocity = FVector::ZeroVector;
+    bool bLandingGearDeployed = true;
+
+    float CurrentGForce = 0.f;
+    float CurrentAOA = 0.f;
+
+    bool ShouldReconcile(const FAetherSyncState& AuthorityState) const
+    {
+        return FVector::DistSquared(Location, AuthorityState.Location) > 100.0f ||
+               Rotation.AngularDistance(AuthorityState.Rotation) > 0.05f ||
+               bLandingGearDeployed != AuthorityState.bLandingGearDeployed;
+    }
+
+    void Interpolate(const FAetherSyncState* From, const FAetherSyncState* To, float PCT)
+    {
+        Location = FMath::Lerp(From->Location, To->Location, PCT);
+        Rotation = FQuat::FastLerp(From->Rotation, To->Rotation, PCT).GetNormalized();
+        LinearVelocity = FMath::Lerp(From->LinearVelocity, To->LinearVelocity, PCT);
+        bLandingGearDeployed = To->bLandingGearDeployed;
+        CurrentGForce = FMath::Lerp(From->CurrentGForce, To->CurrentGForce, PCT);
+        CurrentAOA = FMath::Lerp(From->CurrentAOA, To->CurrentAOA, PCT);
+
+    }
+
+    void NetSerialize(const FNetSerializeParams& P)
+    {
+        P.Ar << Location; P.Ar << Rotation; P.Ar << LinearVelocity;
+        P.Ar << bLandingGearDeployed;
+        P.Ar << CurrentGForce; P.Ar << CurrentAOA;
+    }
+
+
+    void ToString(FAnsiStringBuilderBase& Builder) const
+    {
+        Builder.Appendf("Loc: X=%.2f Y=%.2f Z=%.2f Vel: X=%.2f Y=%.2f Z=%.2f",
+            Location.X, Location.Y, Location.Z, LinearVelocity.X, LinearVelocity.Y, LinearVelocity.Z);
+    }
+};
+
+
+struct FAetherAuxState
+{
+    float Mass = 500.f;            
+
+
+    float MaxForwardThrust = 8500.f; 
+    float MaxReverseThrust = 5000.f;  
+    float MaxStrafeThrust = 5000.f;   
+
+    float MaxSpeed = 15000.f;        
+    float LinearDampingBase = 1.f;
+    float DiveSpeedMultiplier = 1.5f;
+
+    float PitchRate = 2.25f;        
+    float YawRate = 0.25f;
+    float RollRate = 8.0f; 
+    float RollInfluence = 1.0f;
+
+    bool ShouldReconcile(const FAetherAuxState& AuthorityState) const
+    {
+        return Mass != AuthorityState.Mass ||
+            MaxForwardThrust != AuthorityState.MaxForwardThrust ||
+            MaxReverseThrust != AuthorityState.MaxReverseThrust ||
+            MaxStrafeThrust != AuthorityState.MaxStrafeThrust ||
+            MaxSpeed != AuthorityState.MaxSpeed ||
+            LinearDampingBase != AuthorityState.LinearDampingBase ||
+            PitchRate != AuthorityState.PitchRate ||
+            YawRate != AuthorityState.YawRate ||
+            RollRate != AuthorityState.RollRate ||
+            RollInfluence != AuthorityState.RollInfluence ||
+            DiveSpeedMultiplier != AuthorityState.DiveSpeedMultiplier;
+    }
+
+    void Interpolate(const FAetherAuxState* From, const FAetherAuxState* To, float PCT)
+    {
+        *this = *To;
+    }
+
+    void NetSerialize(const FNetSerializeParams& P)
+    {
+        P.Ar << Mass;
+        P.Ar << MaxForwardThrust; P.Ar << MaxReverseThrust; P.Ar << MaxStrafeThrust;
+        P.Ar << MaxSpeed; P.Ar << LinearDampingBase;
+        P.Ar << PitchRate; P.Ar << YawRate; P.Ar << RollRate;
+        P.Ar << RollInfluence;
+        P.Ar << DiveSpeedMultiplier;
+    }
+
+    void ToString(FAnsiStringBuilderBase& Builder) const
+    {
+        Builder.Appendf("Mass: %.2f Fwd: %.2f Strf: %.2f", Mass, MaxForwardThrust, MaxStrafeThrust);
+    }
+};
+```
+
+### File: AetherSimulation.h
+```cpp
+// Copyright (c) 2026 Kadmium (Emil Fredrik Sjöstedt). All rights reserved.
+// Licensed under the Kadmium Software & Source Code License Agreement.
+// See LICENSE.md in the project root for full license terms.
+#pragma once
+
+#include "Libraries/AetherTypes.h"
+#include "NetworkPredictionModelDef.h"
+#include "NetworkPredictionSimulation.h"
+#include "NetworkPredictionTickState.h"
+
+struct FAetherModelDef : FNetworkPredictionModelDef
+{
+    NP_MODEL_BODY();
+
+    using StateTypes = TNetworkPredictionStateTypes<FAetherInputCmd, FAetherSyncState, FAetherAuxState>;
+    using Simulation = class FAetherSimulation;
+    using Driver = class UAetherMovementComponent;
+
+    static const TCHAR* GetName() { return TEXT("AetherMovement"); }
+    static constexpr int32 GetSortPriority() { return (int32)ENetworkPredictionSortPriority::KinematicMovers; }
+};
+
+class FAetherSimulation
+{
+public:
+    // -----------------------
+    // Core Simulation
+    // -----------------------
+    class UAetherMovementComponent* Driver = nullptr;
+
+    void SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FAetherModelDef::StateTypes>& Input, const TNetSimOutput<FAetherModelDef::StateTypes>& Output);
+};
+```
