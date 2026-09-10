@@ -1,6 +1,13 @@
 ## Articles & Community Discussions
 * Read the full background story and technical write-up on [DEV.to](https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20).
 
+> [!IMPORTANT]
+> **Showcase & Intellectual Property Notice**
+> 
+> * **Not Open Source:** This repository is a **read-only architectural showcase** and proof-of-concept. It is not licensed for open-source use, distribution, or commercial integration.
+> * **Purpose:** Created to verify the existence and design of a production-ready 6-DOF movement system built on Unreal Engine 5's experimental **Network Prediction Plugin (NPP)**.
+> * **Code Availability:** All `.h` interfaces, state definitions, and pipeline setups are fully visible to demonstrate C++ code quality and memory layout. Simulation math inside `.cpp` files is stubbed. Full NDA-based source access is available for formal technical audits upon request (`legal@kadmium.dev`).
+
 
 Implementation Verification
 The public repository is intended as an architectural showcase and therefore does not expose the complete implementation.
