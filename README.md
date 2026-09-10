@@ -1,79 +1,141 @@
+## Articles & Community Discussions
+* Read the full background story and technical write-up on [DEV.to](https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20).
+
+
+Implementation Verification
+The public repository is intended as an architectural showcase and therefore does not expose the complete implementation.
+
+For teams requiring deeper technical verification, the underlying C++ implementation can be made available for review under a standard NDA. This includes the simulation, networking, reconciliation, prediction and supporting framework code required to conduct a proper technical audit.
+
+For NDA-based source access or a formal architectural/implementation audit, please contact: legal@kadmium.dev
+
+
+
 # Aether Framework — C++ Architecture Showcase
 
-Read-only code showcase for a custom Unreal Engine 5 movement implementation built on the experimental **Network Prediction** plugin.
+A deterministic, 6-DOF vehicle movement architecture built for Unreal Engine 5 using the experimental **Network Prediction Plugin (NPP)**.
 
-This public repository serves as a **read-only architectural audit** for technical leads and senior engineers evaluating codebase quality, memory layout, and C++ design patterns.
-
----
-
-## Technical Overview
-
-Aether is a custom C++ movement component (`UAetherMovementComponent`) that integrates with UE5's Network Prediction Proxy (NPP) architecture to achieve deterministic client prediction and server reconciliation for multi-axis vehicle flight.
-
-### Scope of Showcase
-
-To comply with repository distribution policies, this public mirror contains the full API layout while stubbing proprietary tick math:
-
-In accordance with the **Kadmium Software & Source Code License Agreement**, the actual simulation implementation details are proprietary.
-
-* **Header Files (`.h`):** 100% complete. Contains class definitions, `UPROPERTY` setups, interface definitions, and state structs (`FAetherInputCmd`, `FAetherSyncState`, `FAetherAuxState`).
-* **Implementation Files (`.cpp`):** Class lifecycle, network proxy initialization, and function signatures are intact. Physics equations and vector transforms inside `AetherSimulation.cpp` are replaced with structural comments.
+This repository serves as a **read-only architectural showcase** for technical leads and senior engineers evaluating C++ code quality, memory layout, network reconciliation, and large-world scale (LWC) stability.
 
 ---
 
-## Architecture & Data Layout
+## Technical Motivation
 
-### 1. Network Prediction Model (`FAetherModelDef`)
-* **State Isolation:** Separates high-frequency networking data (`FAetherSyncState`: Location, Rotation, LinearVelocity) from low-frequency property updates (`FAetherAuxState`: Mass, Thrust, Damping, Control Rates).
-* **Command Buffer (`FAetherInputCmd`):** Serializes raw 6-DOF input vectors, aim vectors, control states, and frame-local gravity forces.
-* **Reconciliation:** Custom `ShouldReconcile` thresholds for distance and angular delta tolerances to minimize correction frequency.
+Standard Unreal Engine solutions like `UCharacterMovementComponent` (CMC) are designed around 2D/3D bipedal movement with implicit 90-degree gravity constraints. Adapting CMC to true 6-DOF spaceflight or custom pawn physics leads to severe maintenance overhead, network jitter under latency, and instability at extreme velocities in Large World Coordinates (LWC).
 
-### 2. Gravity Resolution (`UAetherGravityComponent`)
-* Supports spherical (radial distance falloff) and directional (world-space/local vector) gravity types.
-* Evaluates overlapping volumes via an explicit integer priority hierarchy (`Priority` field).
+**Aether** provides a reusable, network-predicted 6-DOF core where the **prediction proxy owns network plumbing**, allowing the **simulation math to remain decoupled and deterministic**.
 
-### 3. Suspension Simulation
-* Raycast-based spring-damper model executed during the simulation tick (`CalculateLandingGearForces`).
-* Calculates compression, velocity-aligned damping, and leverage-arm torque to update linear and angular acceleration states.
+---
 
-### 4. Aerodynamics & Flight State
-* Computes Angle of Attack (AOA) and G-Force telemetry per frame.
-* Density-scaled lift vectors and speed-dependent control authority scaling (aerodynamic damping vs. spaceflight coupled/decoupled modes).
+## Frame Flow & Pipeline
+
+To prevent client resimulation rollbacks from snapping player vision, the visual mesh is detached from the physics root at `BeginPlay()`. World state queries are isolated to `ProduceInput()`, ensuring `FAetherSimulation` remains a pure function during client rollbacks.
+
+```text
+[ Player Inputs ]
+       │
+       ▼
+[ UAetherAimDirectorComponent ]  ──> Smooths camera/aim vectors
+       │
+       ▼
+[ UAetherMovementComponent ]     ──> ProduceInput() [Samples gravity & environment into FAetherInputCmd]
+       │
+       ▼
+[ FAetherSimulation ]            ──> Pure function tick (Physics, Aerodynamics, Suspension sweeps)
+       │
+   ┌───┴────────────────────────┐
+   ▼                            ▼
+[ FinalizeFrame() ]      [ FinalizeSmoothingFrame() ]
+(Root Physics Actor)     (Detached Visual Mesh & Camera)
+```
+
+---
+
+## Core Architecture
+
+### 1. State Isolation (Input, Sync, Aux)
+
+State data is decoupled into three distinct memory structures to minimize wire payload and separate high-frequency movement ticks from static vessel attributes.
+
+| Struct | Frequency | Replicated Payload / Key Fields | Architectural Purpose |
+| :--- | :--- | :--- | :--- |
+| **`FAetherInputCmd`** | High (Per Tick) | 6-DOF movement axes, AimDirection, GravityForce, EnvironmentDensity | Local sampled control & pre-evaluated environmental state. |
+| **`FAetherSyncState`** | High (Per Tick) | Location (`FVector`), Rotation (`FQuat`), LinearVelocity, GForce, AOA | Authority transform & dynamic flight telemetry. |
+| **`FAetherAuxState`** | Low (On Change) | Mass, MaxForwardThrust, PitchRate, YawRate, RollRate, Damping | Static vessel specs; updated via `WriteAuxState<FAetherAuxState>()`. |
+
+```cpp
+struct FAetherModelDef : FNetworkPredictionModelDef
+{
+    NP_MODEL_BODY();
+
+    using StateTypes = TNetworkPredictionStateTypes<FAetherInputCmd, FAetherAuxState, FAetherSyncState>;
+    using Simulation = class FAetherSimulation;
+    using Driver     = class UAetherMovementComponent;
+
+    static const TCHAR* GetName() { return TEXT("AetherMovement"); }
+    static constexpr int32 GetSortPriority() { return (int32)ENetworkPredictionSortPriority::KinematicMovers; }
+};
+```
+
+### 2. Deterministic Resimulation & World Querying
+* **Pure Function Simulation:** Calling `GetWorld()` or performing overlap queries inside `SimulationTick()` breaks determinism during client rollbacks. `ProduceInput()` samples surrounding `UAetherGravityComponent` volumes and serializes `GravityForce` and `EnvironmentDensity` directly into `FAetherInputCmd`.
+* **Aerodynamic Scaling:** `EnvironmentDensity` scales lift vectors, drag, and coupled/decoupled flight modes dynamically without executing scene queries during resimulation frames.
+
+### 3. Precision Reconciliation Thresholds
+To eliminate visual snapping at high speeds in UE5 LWC (double precision), `ShouldReconcile` relies on squared distances and quaternion angular deltas to avoid gimbal lock edge cases:
+
+```cpp
+bool ShouldReconcile(const FAetherSyncState& AuthorityState) const
+{
+    return FVector::DistSquared(Location, AuthorityState.Location) > 100.0f ||
+           Rotation.AngularDistance(AuthorityState.Rotation) > 0.05f ||
+           bLandingGearDeployed != AuthorityState.bLandingGearDeployed;
+}
+```
+
+### 4. Suspension Model
+* Raycast-based spring-damper model executed inside `CalculateLandingGearForces`.
+* Converts spring compression, leverage arms, and velocity-aligned damping into linear force and angular acceleration applied to vessel mass.
+
+---
+
+## Source Code Access & Technical Audit (NDA)
+
+To comply with licensing and commercial protection, this public mirror contains the complete header layout while stubbing proprietary tick math inside `AetherSimulation.cpp`.
+
+* **Public Mirror Includes:** 100% complete `.h` interface definitions, `UPROPERTY` reflections, state structs, and network proxy bindings.
+* **Full C++ Source Access:** For engineering teams requiring a complete technical audit or implementation review, full source access (including complete simulation, networking, and reconciliation implementations) is available under a standard NDA.
+
+For source access requests or architectural audits, contact: **`legal@kadmium.dev`**
 
 ---
 
 ## Repository Structure
 
-│─Aether_Showcase
-│  └─Source/
-│      └── Aether/
-│           ├── Public/         # Complete C++ headers and state definitions
-│           └── Private/        # Implementation stubs & network proxy bindings
-├── KNOWN_ISSUES.md         # Technical debt, prototype trade-offs, and optimization queue
-├── Aether.uplugin          # Plugin descriptor (NetworkPrediction dependency)
+```text
+│─ Aether_Showcase
+│   └─ Source/
+│       └── Aether/
+│            ├── Public/        # Complete C++ headers and state definitions
+│            └── Private/       # Implementation stubs & network proxy bindings
+├── KNOWN_ISSUES.md             # Technical debt, trade-offs, and optimization queue
+├── Aether.uplugin               # Plugin descriptor (NetworkPrediction dependency)
 └── README.md
-
-
----
-
-## Known Trade-Offs & Technical Debt
-
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for details on:
-* In-tick raycasting overhead during NPP client resimulation rollbacks.
-* Direct float comparisons queued for `FMath::IsNearlyZero` refactoring.
-* Hardcoded simulation constants targeted for `UDataAsset` exposure.
+```
 
 ---
 
-## Demo & Visuals
+## Known Trade-Offs & Roadmap
 
-* **Playable Test Build (.exe):** *COMING SOON*
-* **Video Deep-Dive:** *COMING SOON*
+See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for current engineering debt, including:
+* In-tick suspension raycast pre-caching during NPP client resimulations.
+* Direct float comparison refactoring to `FMath::IsNearlyZero`.
+* Migration of inline simulation constants to `UDataAsset` definitions.
 
 ---
 
 ## License & Contact
 
-* **License Terms:** [kadmium.dev/license](https://www.kadmium.dev/license)
+* **License Terms:** [Kadmium License Agreement](https://www.kadmium.dev/license)
 * **Author:** Emil Fredrik Sjöstedt (Kadmium)
-* **Contact:** `legal@kadmium.dev`
+* **Contact & Inquiries:** `emil@kadmium.dev` | `legal@kadmium.dev`
