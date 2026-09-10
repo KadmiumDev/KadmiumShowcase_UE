@@ -1,5 +1,5 @@
 ## Articles & Community Discussions
-* Read the full background story and technical write-up on [DEV.to](https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20).
+* Read the full background story and technical write-up on DEV.to | https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20
 
 > [!IMPORTANT]
 > **Showcase & Intellectual Property Notice**
