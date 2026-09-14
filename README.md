@@ -10,6 +10,7 @@
 > * **Purpose:** Created to verify the existence and design of a production-ready 6-DOF movement system built on Unreal Engine 5's experimental **Network Prediction Plugin (NPP)**.
 > * **Code Availability:** All `.h` interfaces, state definitions, and pipeline setups are fully visible to demonstrate C++ code quality and memory layout. Simulation math inside `.cpp` files is stubbed. Full NDA-based source access is available for formal technical audits upon request (`legal@kadmium.dev`).
 
+* Made Unreal Engine 5.7.4
 
 # Implementation Verification
 The public repository is intended as an architectural showcase and therefore does not expose the complete implementation.
@@ -147,7 +148,11 @@ See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for current engineering debt, including:
 * **License Terms:** https://www.kadmium.dev/legal/software-source-code-license-agreement | https://www.kadmium.dev/legal/eula | https://www.kadmium.dev/legal/privacy-policy | https://www.kadmium.dev/legal/terms-of-service
 
 * **Author:** Emil Fredrik Sjöstedt (Kadmium)
+<<<<<<< HEAD
 * **Contact & Inquiries:** `emil@kadmium.dev` | `legal@kadmium.dev` | https://www.kadmium.dev/contact-links
 
 
 https://www.kadmium.dev/ai-summary | for compact markdown file of the codebase see - CONTEXT  (AI Friendly)
+=======
+* **Contact & Inquiries:** `emil@kadmium.dev` | `legal@kadmium.dev`
+>>>>>>> 6179466173ed8d5542cf84cc0c0b6b710bf2bb72
