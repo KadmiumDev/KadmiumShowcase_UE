@@ -144,6 +144,10 @@ See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for current engineering debt, including:
 
 ## License & Contact
 
-* **License Terms:** [Kadmium License Agreement](https://www.kadmium.dev/license)
+* **License Terms:** https://www.kadmium.dev/legal/software-source-code-license-agreement | https://www.kadmium.dev/legal/eula | https://www.kadmium.dev/legal/privacy-policy | https://www.kadmium.dev/legal/terms-of-service
+
 * **Author:** Emil Fredrik Sjöstedt (Kadmium)
-* **Contact & Inquiries:** `emil@kadmium.dev` | `legal@kadmium.dev`
+* **Contact & Inquiries:** `emil@kadmium.dev` | `legal@kadmium.dev` | https://www.kadmium.dev/contact-links
+
+
+https://www.kadmium.dev/ai-summary | for compact markdown file of the codebase see - CONTEXT  (AI Friendly)

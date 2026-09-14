@@ -1,46 +1,53 @@
 # Known Technical Debt & Architecture Roadmap
 
-> **Note to Reviewers:** This repository represents an architectural showcase of Aether's core layout, state isolation, and Unreal Engine Network Prediction plugin integration. Proprietary simulation math is omitted from public showcase files, but all prototype technical debt items have been resolved in the internal codebase.
+> **Note to Reviewers:** This public showcase repository demonstrates the high-level C++ architecture, API layout, state isolation, and Unreal Engine Network Prediction plugin integration. Proprietary tick physics, vector simulation math, and internal live-build optimizations are omitted or stubbed in the public showcase files in accordance with licensing agreements.
 
 ---
 
-## Resolved in Live Build
+## Showcase vs. Live Build Differences & Active Refactoring
 
-The following architectural optimizations and debt items from earlier prototype iterations are fully implemented in the live codebase:
+The list below outlines key architectural differences between this public showcase mirror and the internal live build (Aether Live), alongside optimizations currently under active development in the internal codebase:
 
-### 1. Network Resimulation & Physics Trace Optimization
-* **Pre-Cached Physics Traces:** Optimized `SweepSimulation` and `CalculateLandingGearForces` by pre-caching raycasts and collision sweep data prior to Network Prediction Proxy (NPP) rollback evaluation. This eliminates redundant trace overhead during client resimulation frames.
+### 1. Network Payload & Bandwidth Optimization (Live Build)
+* **Input Cmd Serialization & Quantization:** While the showcase uses uncompressed floats in FAetherInputCmd, the live build quantizes control axes (ForwardCmd, RightCmd, UpCmd, PitchCmd, YawCmd, RollCmd) to 8-bit integers (int8) in NetSerialize.
+* **Bit-Packed Flags & Quantized Normal Aiming:** Booleans (bIsCoupledMode, bWantsLandingGear) are bit-packed into a 2-bit field mask, and the aim direction uses FVector_NetQuantizeNormal instead of raw vectors.
+* **Deterministic Environment Parameters:** GravityForce and EnvironmentDensity are removed from network serialization and evaluated deterministically per-tick across both client and server to save bandwidth.
 
-### 2. Configurable Flight Profiles & DataAsset Support
-* **AuxState & DataAsset Integration:** Decoupled operational constants (such as lift curves, terminal velocity multipliers, and dot-product thresholds) into `FAetherAuxState` and `UDataAsset` configs. Flight characteristics can now be tuned by designers at runtime without C++ re-compilation.
+### 2. Gravity Subsystem & Deterministic Resolution (Live Build)
+* **Subsystem-Driven Gravity (UAetherGravitySubsystem):** Showcase uses component overlap tracking. The live build utilizes a dedicated UWorldSubsystem that eliminates component overlap polling.
+* **Direct SyncState Lookup:** Pulls world transforms directly from UAetherMovementComponent's FAetherSyncState to maintain strict determinism during network prediction rollbacks.
+* **Per-Frame Transform Caching & Batch Registration:** Implemented GFrameCounter checks to cap transform updates for moving zones to once per frame and added RegisterZonesBatch() for mass-spawning large object groups (e.g., asteroid fields) in a single pass.
 
-### 3. Component Lifecycle & Memory Safety
-* **Weak Pointer Tracking (`TWeakObjectPtr`):** Replaced raw C++ pointers (`TArray<UAetherGravityComponent*>`) with `TWeakObjectPtr` arrays for all external component references (`ActiveGravitySources` and `ActiveLandingGears`). This guards against dangling pointer crashes when gravity volumes or landing gear components are destroyed dynamically in the world.
+### 3. Suspension & Landing Gear Refactoring (Live Build)
+* **POD Struct Caching:** Replaced runtime component array iterations in simulation ticks with flat TArray<FAetherGearData> POD structs initialized at BeginPlay.
+* **Three-Stage Early-Exit Traces:** 
+  1. *Altitude Exit:* Bypasses raycasts when gear is retracted or altitude is out of range.
+  2. *Hysteresis Center Probe:* Runs a single sphere trace along the ship's local Z-axis (activation <15m, deactivation >18m) before evaluating individual suspension components.
+  3. *POD Execution:* Executes short individual line traces per gear only when the center probe registers ground contact.
+* **Single-Pass Mass Scaling:** Removed duplicate pre-loop passes for gear counting; mass distribution scales directly via cached array size.
 
-### 4. Input Clamping & High-DPI Handling
-* **Delta Clamping & Sensitivity Scaling:** Removed hard input rejection (which previously discarded mouse deltas `> 50.f`). Implemented smooth `FMath::Clamp` logic with customizable sensitivity scaling (`Sensitivity`) in `UAetherAimDirectorComponent::AddAimInput` to properly support high-DPI hardware and eliminate rotational snapping during frame drops.
+### 4. Physics Simulation & Precision Fixes (Live Build)
+* **Rotation Matrix Stale State Fix:** Recalculates ActiveInverseRot in SimulationTick immediately after landing gear torque and collision deflection to ensure mouse aim and horizon leveling use updated local space.
+* **Visual Smoothing Fix:** Removed per-frame zeroing of SmoothingTranslationOffset in FinalizeSmoothingFrame to eliminate interpolation stutter; offset clearing is handled directly in TeleportTo().
+* **Penetration Resolution:** Fixed bStartPenetrating handling in SweepSimulation by driving displacement purely via impact normal without extra depth padding.
+* **Codebase Cleanup:** Completely removed obsolete ActiveGravitySources and ActiveLandingGears raw weak pointer arrays from UAetherMovementComponent.
 
-### 5. Math & Floating-Point Precision
-* **UE Tolerance Helpers:** Replaced direct float checks (such as raw `< 0.98f` comparisons) with standard Unreal Engine safety functions like `FMath::IsNearlyEqual` and `FMath::IsNearlyZero`. This guarantees consistency across different hardware architectures and platforms.
-
-### 6. Developer Tooling & Simulation Diagnostics
-* **Dedicated Engine Settings (`UAetherDeveloperSettings`):** Integrated a custom developer settings panel into the engine for real-time diagnostic control.
-* **Visual 3D Sync Trails:** Added real-time 3D trail visualization comparing local client trajectories against server prediction vectors to instantly identify desync offsets.
-* **Network Stress & Environmental Overrides:** Added editor tools to simulate packet loss (`SimulatedPacketLossPercent`), force client/server reconciliation scenarios, and override environmental parameters like atmospheric density on the fly.
+### 5. Developer Tooling & Simulation Diagnostics (Live Build)
+* **Dedicated Engine Settings (UAetherDeveloperSettings):** Integrated a developer settings panel into the engine for real-time diagnostic control and network emulation scenarios (Ideal, Bad WiFi, High Ping, Packet Loss Spikes).
+* **Visual 3D Sync Overlay (SAetherDebugOverlay):** Slate-based debug overlay providing real-time telemetry (Sim time in µs, G-Force, AOA, Net Lag, Bandwidth, Desync cm, Total Rollbacks) and 3D sync trails comparing local client trajectories against server prediction vectors.
 
 ---
 
 ## Future Roadmap
 
 ### Immediate Milestones
-* **Public Showcase Video:** A video showcasing network reconciliation, atmospheric flight, and 6-DOF physics on wednesday 16 September - 14:00 CEST+1,Sweden. Thereafter a In-depth technical breakdown video.
+* **Public Showcase Video:** A video showcasing network reconciliation, atmospheric flight, and 6-DOF physics on Wednesday 16 September - 14:00 CEST+1 (Sweden). Thereafter an in-depth technical breakdown video.
+* **Playable Test Demo:** A standalone compiled test environment executable for reviewers to evaluate flight feel and network handling directly.
 
-* **Playable Test Demo:** A standalone compiled test environment executable for reviewers to evaluate flight feel and network handling directly, as soon as some time frees up for me.
-
-### Extended Expansion (Funding Dependent - see https://www.kadmium.dev/dev-tech/ue-frameworks/aether or visit https://kadmium.gumroad.com/)
+### Extended Expansion (Funding Dependent - see [kadmium.dev/aether](https://www.kadmium.dev/dev-tech/ue-frameworks/aether) or [Gumroad](https://kadmium.gumroad.com/))
 Subject to securing additional development funding, planned architecture expansions include:
 
-* **Advanced Atmospheric & Turbulence Simulation:** Expanding `UAetherGravityComponent` and environmental handlers to support volumetric wind, dynamic turbulence, and weather-driven flight interference.
+* **Advanced Atmospheric & Turbulence Simulation:** Expanding UAetherGravityComponent and environmental handlers to support volumetric wind, dynamic turbulence, and weather-driven flight interference.
 * **Dedicated Ground Vehicle Simulation:** Extending Aether's NPP engine to handle wheeled and tracked vehicle physics, suspension dynamics, and surface traction under custom gravity fields.
 * **Advanced 6-DOF Character Movement:** A custom predicted character movement model built for high-mobility gameplay (featuring wall-running, thruster mechanics, and dynamic orientation).
 * **Dedicated VR Motion Comfort System:** VR-tailored camera stabilization, dynamic horizon-locking, and visual comfort anchors to eliminate motion sickness during aggressive high-G maneuvers in HMD cockpits.
