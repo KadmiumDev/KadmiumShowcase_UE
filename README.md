@@ -134,22 +134,20 @@ For source access requests or architectural audits, contact: **`legal@kadmium.de
 
 ---
 
-## Known Trade-Offs & Roadmap
+## Known Trade-Offs & Architecture Roadmap
 
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for current engineering debt, including:
-* In-tick suspension raycast pre-caching during NPP client resimulations.
-* Direct float comparison refactoring to `FMath::IsNearlyZero`.
-* Migration of inline simulation constants to `UDataAsset` definitions.
+See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for complete details on engineering debt, internal live-build optimizations, and the expansion roadmap. Key items include:
+
+* **Showcase vs. Live Build Differences:** Network payload quantization (int8/bit-packing), subsystem-driven gravity (`UAetherGravitySubsystem`), three-stage early-exit suspension raycasting, and Slate-based debug tools (`SAetherDebugOverlay`).
+* **Immediate Milestones:** Public showcase video (Wednesday 16 September - 14:00 CEST+1) and a standalone playable demo.
+* **Extended Roadmap (Funding Dependent):** Advanced atmospheric turbulence, dedicated ground/wheeled vehicle simulation, predicted 6-DOF character movement, and VR motion comfort systems.
 
 ---
 
 ## License & Contact
 
 * **License Terms:** https://www.kadmium.dev/legal/software-source-code-license-agreement | https://www.kadmium.dev/legal/eula | https://www.kadmium.dev/legal/privacy-policy | https://www.kadmium.dev/legal/terms-of-service
-
+* **Project Page & Funding:** https://www.kadmium.dev/dev-tech/ue-frameworks/aether | https://kadmium.gumroad.com/
+* **AI Friendly Documentation:** https://www.kadmium.dev/ai-summary
 * **Author:** Emil Fredrik Sjöstedt (Kadmium)
-
 * **Contact & Inquiries:** `emil@kadmium.dev` | `legal@kadmium.dev` | https://www.kadmium.dev/contact-links
-
-https://www.kadmium.dev/ai-summary | for compact markdown file of the codebase see - CONTEXT  (AI Friendly)
-* **Contact & Inquiries:** `emil@kadmium.dev` | `legal@kadmium.dev`
