@@ -1,5 +1,7 @@
 ## Articles & Community Discussions
 * Read the full background story and technical write-up on DEV.to | https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20
+* A showcase video from the livebuild will release on wednesday 16 September - 14:00 CEST+1,Sweden.
+* A playeable demo will release short after as soon as some time frees up for me.
 
 > [!IMPORTANT]
 > **Showcase & Intellectual Property Notice**
@@ -9,13 +11,12 @@
 > * **Code Availability:** All `.h` interfaces, state definitions, and pipeline setups are fully visible to demonstrate C++ code quality and memory layout. Simulation math inside `.cpp` files is stubbed. Full NDA-based source access is available for formal technical audits upon request (`legal@kadmium.dev`).
 
 
-Implementation Verification
+# Implementation Verification
 The public repository is intended as an architectural showcase and therefore does not expose the complete implementation.
 
 For teams requiring deeper technical verification, the underlying C++ implementation can be made available for review under a standard NDA. This includes the simulation, networking, reconciliation, prediction and supporting framework code required to conduct a proper technical audit.
 
 For NDA-based source access or a formal architectural/implementation audit, please contact: legal@kadmium.dev
-
 
 
 # Aether Framework — C++ Architecture Showcase

@@ -33,8 +33,9 @@ The following architectural optimizations and debt items from earlier prototype 
 ## Future Roadmap
 
 ### Immediate Milestones
-* **Public Showcase Video:** In-depth technical breakdown and video demonstration showcasing network reconciliation, atmospheric flight, and 6-DOF physics.
-* **Playable Test Demo:** A standalone compiled test environment executable for reviewers to evaluate flight feel and network handling directly.
+* **Public Showcase Video:** A video showcasing network reconciliation, atmospheric flight, and 6-DOF physics on wednesday 16 September - 14:00 CEST+1,Sweden. Thereafter a In-depth technical breakdown video.
+
+* **Playable Test Demo:** A standalone compiled test environment executable for reviewers to evaluate flight feel and network handling directly, as soon as some time frees up for me.
 
 ### Extended Expansion (Funding Dependent - see https://www.kadmium.dev/dev-tech/ue-frameworks/aether or visit https://kadmium.gumroad.com/)
 Subject to securing additional development funding, planned architecture expansions include:
