@@ -20,6 +20,38 @@ For teams requiring deeper technical verification, the underlying C++ implementa
 For NDA-based source access or a formal architectural/implementation audit, please contact: legal@kadmium.dev
 
 
+## Network Emulation & Profiling Results
+
+All stress tests were conducted with a **60 Hz dedicated server tick rate** using Unreal Engine's built-in packet simulation emulation and standard Network Prediction Plugin (NPP) reconciliation defaults.
+
+| Scenario | 1-Way Latency / RTT | Packet Loss / Jitter / Reorder | Client Visual Experience | Network Prediction & Buffer Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| **Ideal** | 0 ms / 0 ms | 0% / 0 ms / 0% | Baseline Flawless | 0 Restore Events / 0 Hard Rollbacks |
+| **GoodBroadband** | 20 ms / 40 ms | 0% / 2 ms / 0% | Imperceptible from Ideal | Zero network desync |
+| **BadWiFi** | 40 ms / 80 ms | 8% / 20 ms / 3% | Imperceptible from Ideal | Zero network desync |
+| **HighPing** | 180 ms / 360 ms | 0% / 10 ms / 0% | Imperceptible from Ideal | Local prediction handles input latency cleanly |
+| **SevereJitter** | 80 ms / 160 ms | 2% / 60 ms / 10% | Imperceptible from Ideal | Jitter absorbed by prediction buffer |
+| **PacketLossSpike** | 50 ms / 100 ms | 15% / 10 ms / 0% | Imperceptible from Ideal | Zero visual stuttering |
+| **AetherStable** | 300 ms / 600 ms | 15% / 80 ms / 1% | Imperceptible from Ideal | Full 600 ms RTT absorbed with 0 hard rollbacks |
+| **AetherUnstable** | 600 ms / 1200 ms | 25% / 100 ms / 3% | Visually Smooth | Minor `RESTORE EVENTS` triggered; no client snaps |
+| **AetherExtreme** | 1200 ms / 2400 ms | 35% / 200 ms / 5% | Visually Smooth | Velocity-compensated `SmoothingTranslationOffset` dikes out historical adjustments |
+| **JustNo** | 3000 ms / 6000 ms | 70% / 300 ms / 10% | Playable (micro-stutters); increasing reconciliation thresholds trades sim accuracy for visual smoothness | Heavy Input Starvation & frequent resimulations; input lag noticeable |
+
+---
+
+[!NOTE]
+> **Developer's Note & Personal Reflection**
+>
+> Maybe a bit informal for a technical README, but I'm honestly way too hyped for tomorrow's video showcase! Pushing AETHER to its absolute limits in the 
+> current live build has been incredible. Seeing `FAetherInputCmd`, the detached visual mesh smoothing, and UE5's Network Prediction Plugin work in harmony 
+> inside a pure,  stateless simulation tick has yielded performance and deterministic accuracy beyond what I originally thought possible.
+>
+> Being able to throw **3,000 ms 1-way latency (6,000 ms RTT)** at a 6-DOF simulation while keeping the ship flyable and visually stable still leaves me in awe. 
+> Future optimization passes might even let us test absurd thresholds like 6,000–8,000 ms 1-way—which is completely ridiculous for real-world networking, 
+> but a fantastic testament to how far this architecture can be stretched!
+
+---
+
 # Aether Framework — C++ Architecture Showcase
 
 A deterministic, 6-DOF vehicle movement architecture built for Unreal Engine 5 using the experimental **Network Prediction Plugin (NPP)**.
