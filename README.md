@@ -1,7 +1,7 @@
 ## Articles & Community Discussions
 * Read the full background story and technical write-up on DEV.to | https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20
-* A showcase video from the livebuild will release on wednesday 16 September - 14:00 CEST+1,Sweden.
-* A playeable demo will release short after as soon as some time frees up for me.
+* A showcase video from the livebuild will release on wednesday 16 September - 14:00 CEST+1, Sweden.
+* A playable demo will release shortly after as soon as time permits.
 
 > [!IMPORTANT]
 > **Showcase & Intellectual Property Notice**
@@ -10,19 +10,19 @@
 > * **Purpose:** Created to verify the existence and design of a production-ready 6-DOF movement system built on Unreal Engine 5's experimental **Network Prediction Plugin (NPP)**.
 > * **Code Availability:** All `.h` interfaces, state definitions, and pipeline setups are fully visible to demonstrate C++ code quality and memory layout. Simulation math inside `.cpp` files is stubbed. Full NDA-based source access is available for formal technical audits upon request (`legal@kadmium.dev`).
 
-* Made Unreal Engine 5.7.4
+* Made for Unreal Engine 5.7.4
 
 # Implementation Verification
 The public repository is intended as an architectural showcase and therefore does not expose the complete implementation.
 
 For teams requiring deeper technical verification, the underlying C++ implementation can be made available for review under a standard NDA. This includes the simulation, networking, reconciliation, prediction and supporting framework code required to conduct a proper technical audit.
 
-For NDA-based source access or a formal architectural/implementation audit, please contact: legal@kadmium.dev
+For NDA-based source access or a formal architectural/implementation audit, please contact: **legal@kadmium.dev**
 
 
 ## Network Emulation & Profiling Results
 
-All stress tests were conducted with a **60 Hz dedicated server tick rate** |  **Ship max speed was 55,000cm/s** using Unreal Engine's built-in packet simulation emulation and standard Network Prediction Plugin (NPP) reconciliation defaults.
+All stress tests were conducted with a **60 Hz dedicated server tick rate** | **Ship max speed was 55,000cm/s** using Unreal Engine's built-in packet simulation emulation (`UAetherDeveloperSettings`) and standard Network Prediction Plugin (NPP) reconciliation defaults.
 
 | Scenario | 1-Way Latency / RTT | Packet Loss / Jitter / Reorder | Client Visual Experience | Network Prediction & Buffer Behavior |
 | :--- | :--- | :--- | :--- | :--- |
@@ -39,7 +39,7 @@ All stress tests were conducted with a **60 Hz dedicated server tick rate** |  *
 
 ---
 
-[!NOTE]
+> [!NOTE]
 > **Developer's Note & Personal Reflection**
 >
 > Maybe a bit informal for a technical README, but I'm honestly way too hyped for tomorrow's video showcase! Pushing AETHER to its absolute limits in the 
@@ -76,10 +76,10 @@ To prevent client resimulation rollbacks from snapping player vision, the visual
 [ Player Inputs ]
        │
        ▼
-[ UAetherAimDirectorComponent ]  ──> Smooths camera/aim vectors
+[ UAetherAimDirectorComponent ]  ──> Smooths camera/aim vectors with sensitivity & clamping
        │
        ▼
-[ UAetherMovementComponent ]     ──> ProduceInput() [Samples gravity & environment into FAetherInputCmd]
+[ UAetherMovementComponent ]     ──> ProduceInput() [Samples gravity via UAetherGravitySubsystem into FAetherInputCmd]
        │
        ▼
 [ FAetherSimulation ]            ──> Pure function tick (Physics, Aerodynamics, Suspension sweeps)
@@ -87,7 +87,7 @@ To prevent client resimulation rollbacks from snapping player vision, the visual
    ┌───┴────────────────────────┐
    ▼                            ▼
 [ FinalizeFrame() ]      [ FinalizeSmoothingFrame() ]
-(Root Physics Actor)     (Detached Visual Mesh & Camera)
+(Root Physics Actor)     (Detached Visual Mesh with SmoothingTranslationOffset)
 ```
 
 ---
@@ -100,7 +100,7 @@ State data is decoupled into three distinct memory structures to minimize wire p
 
 | Struct | Frequency | Replicated Payload / Key Fields | Architectural Purpose |
 | :--- | :--- | :--- | :--- |
-| **`FAetherInputCmd`** | High (Per Tick) | 6-DOF movement axes, AimDirection, GravityForce, EnvironmentDensity | Local sampled control & pre-evaluated environmental state. |
+| **`FAetherInputCmd`** | High (Per Tick) | 6-DOF movement axes (quantized `int8`), AimDirection (`NetQuantizeNormal`), 2-bit flag mask | Local sampled control; environmental states evaluated deterministically via subsystem. |
 | **`FAetherSyncState`** | High (Per Tick) | Location (`FVector`), Rotation (`FQuat`), LinearVelocity, GForce, AOA | Authority transform & dynamic flight telemetry. |
 | **`FAetherAuxState`** | Low (On Change) | Mass, MaxForwardThrust, PitchRate, YawRate, RollRate, Damping | Static vessel specs; updated via `WriteAuxState<FAetherAuxState>()`. |
 
@@ -109,7 +109,7 @@ struct FAetherModelDef : FNetworkPredictionModelDef
 {
     NP_MODEL_BODY();
 
-    using StateTypes = TNetworkPredictionStateTypes<FAetherInputCmd, FAetherAuxState, FAetherSyncState>;
+    using StateTypes = TNetworkPredictionStateTypes<FAetherInputCmd, FAetherAuxState FAetherSyncState,>;
     using Simulation = class FAetherSimulation;
     using Driver     = class UAetherMovementComponent;
 
@@ -118,25 +118,16 @@ struct FAetherModelDef : FNetworkPredictionModelDef
 };
 ```
 
-### 2. Deterministic Resimulation & World Querying
-* **Pure Function Simulation:** Calling `GetWorld()` or performing overlap queries inside `SimulationTick()` breaks determinism during client rollbacks. `ProduceInput()` samples surrounding `UAetherGravityComponent` volumes and serializes `GravityForce` and `EnvironmentDensity` directly into `FAetherInputCmd`.
-* **Aerodynamic Scaling:** `EnvironmentDensity` scales lift vectors, drag, and coupled/decoupled flight modes dynamically without executing scene queries during resimulation frames.
+### 2. Subsystem-Driven Gravity & Deterministic Resimulation
+* **Subsystem-Based Queries (`UAetherGravitySubsystem`):** Replaced component overlaps with a dedicated `UWorldSubsystem` that handles both Spherical planets and Directional OBB (Oriented Bounding Box) volumes.
+* **Pure Resimulation Ticks:** Gravity forces and environmental density are resolved deterministically without direct scene polling during resimulation frames.
 
-### 3. Precision Reconciliation Thresholds
-To eliminate visual snapping at high speeds in UE5 LWC (double precision), `ShouldReconcile` relies on squared distances and quaternion angular deltas to avoid gimbal lock edge cases:
+### 3. Precision Reconciliation & Telemetry
+To eliminate visual snapping at high speeds, `ShouldReconcile` checks squared distances and quaternion angular deltas against configurable engine settings (`UAetherDeveloperSettings`), while logging telemetry metrics (`RecordTelemetryEvent`).
 
-```cpp
-bool ShouldReconcile(const FAetherSyncState& AuthorityState) const
-{
-    return FVector::DistSquared(Location, AuthorityState.Location) > 100.0f ||
-           Rotation.AngularDistance(AuthorityState.Rotation) > 0.05f ||
-           bLandingGearDeployed != AuthorityState.bLandingGearDeployed;
-}
-```
-
-### 4. Suspension Model
-* Raycast-based spring-damper model executed inside `CalculateLandingGearForces`.
-* Converts spring compression, leverage arms, and velocity-aligned damping into linear force and angular acceleration applied to vessel mass.
+### 4. Optimized Suspension System
+* Databased POD structs (`FAetherGearData`) cache suspension parameters to eliminate runtime component queries.
+* Uses a 3-stage early exit with altitude checks and a hysteresis center probe (`bCenterProbeActive`) to minimize line trace costs during NPP rollbacks.
 
 ---
 
@@ -156,29 +147,18 @@ For source access requests or architectural audits, contact: **`legal@kadmium.de
 ```text
 │─ Aether_Showcase
 │   └─ Source/
-│       └── Aether/
-│            ├── Public/        # Complete C++ headers and state definitions
-│            └── Private/       # Implementation stubs & network proxy bindings
-├── KNOWN_ISSUES.md             # Technical debt, trade-offs, and optimization queue
+│       ├── Aether/             # Runtime movement module & gravity subsystem
+│       └── AetherEditor/       # Editor tools & Slate debug overlay (SAetherDebugOverlay)
+├── KNOWN_ISSUES.md             # Technical debt, live vs showcase diffs, and optimization queue
 ├── Aether.uplugin               # Plugin descriptor (NetworkPrediction dependency)
 └── README.md
 ```
 
 ---
 
-## Known Trade-Offs & Architecture Roadmap
-
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for complete details on engineering debt, internal live-build optimizations, and the expansion roadmap. Key items include:
-
-* **Showcase vs. Live Build Differences:** Network payload quantization (int8/bit-packing), subsystem-driven gravity (`UAetherGravitySubsystem`), three-stage early-exit suspension raycasting, and Slate-based debug tools (`SAetherDebugOverlay`).
-* **Immediate Milestones:** Public showcase video (Wednesday 16 September - 14:00 CEST+1) and a standalone playable demo.
-* **Extended Roadmap (Funding Dependent):** Advanced atmospheric turbulence, dedicated ground/wheeled vehicle simulation, predicted 6-DOF character movement, and VR motion comfort systems.
-
----
-
 ## License & Contact
 
-* **License Terms:** https://www.kadmium.dev/legal/software-source-code-license-agreement | https://www.kadmium.dev/legal/eula | https://www.kadmium.dev/legal/privacy-policy | https://www.kadmium.dev/legal/terms-of-service
+* **License Terms:** https://www.kadmium.dev/legal/software-source-code-license-agreement | https://www.kadmium.dev/legal/eula
 * **Project Page & Funding:** https://www.kadmium.dev/dev-tech/ue-frameworks/aether | https://kadmium.gumroad.com/
 * **AI Friendly Documentation:** https://www.kadmium.dev/ai-summary
 * **Author:** Emil Fredrik Sjöstedt (Kadmium)

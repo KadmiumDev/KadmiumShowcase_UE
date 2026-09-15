@@ -9,32 +9,32 @@
 The list below outlines key architectural differences between this public showcase mirror and the internal live build (Aether Live), alongside optimizations currently under active development in the internal codebase:
 
 ### 1. Network Payload & Bandwidth Optimization (Live Build)
-* **Input Cmd Serialization & Quantization:** While the showcase uses uncompressed floats in FAetherInputCmd, the live build quantizes control axes (ForwardCmd, RightCmd, UpCmd, PitchCmd, YawCmd, RollCmd) to 8-bit integers (int8) in NetSerialize.
-* **Bit-Packed Flags & Quantized Normal Aiming:** Booleans (bIsCoupledMode, bWantsLandingGear) are bit-packed into a 2-bit field mask, and the aim direction uses FVector_NetQuantizeNormal instead of raw vectors.
-* **Deterministic Environment Parameters:** GravityForce and EnvironmentDensity are removed from network serialization and evaluated deterministically per-tick across both client and server to save bandwidth.
+* **Input Cmd Serialization & Quantization:** While the showcase uses uncompressed floats in `FAetherInputCmd`, the live build quantizes control axes (`ForwardCmd`, `RightCmd`, `UpCmd`, `PitchCmd`, `YawCmd`, `RollCmd`) to 8-bit integers (`int8`) in `NetSerialize`.
+* **Bit-Packed Flags & Quantized Normal Aiming:** Booleans (`bIsCoupledMode`, `bWantsLandingGear`) are bit-packed into a 2-bit field mask, and the aim direction uses `FVector_NetQuantizeNormal` instead of raw vectors.
+* **Deterministic Environment Parameters:** `GravityForce` and `EnvironmentDensity` are removed from network serialization and evaluated deterministically per-tick via the gravity subsystem across both client and server.
 
 ### 2. Gravity Subsystem & Deterministic Resolution (Live Build)
-* **Subsystem-Driven Gravity (UAetherGravitySubsystem):** Showcase uses component overlap tracking. The live build utilizes a dedicated UWorldSubsystem that eliminates component overlap polling.
-* **Direct SyncState Lookup:** Pulls world transforms directly from UAetherMovementComponent's FAetherSyncState to maintain strict determinism during network prediction rollbacks.
-* **Per-Frame Transform Caching & Batch Registration:** Implemented GFrameCounter checks to cap transform updates for moving zones to once per frame and added RegisterZonesBatch() for mass-spawning large object groups (e.g., asteroid fields) in a single pass.
+* **Subsystem-Driven Gravity (`UAetherGravitySubsystem`):** Showcase uses component overlap tracking. The live build utilizes a dedicated `UWorldSubsystem` that eliminates component overlap polling and supports both Spherical planets and Directional OBB (Oriented Bounding Box) volumes.
+* **Direct SyncState Lookup:** Pulls world transforms directly from `UAetherMovementComponent`'s `FAetherSyncState` to maintain strict determinism during network prediction rollbacks.
+* **Per-Frame Transform Caching & Batch Registration:** Implemented `GFrameCounter` checks to cap transform updates for moving zones to once per frame and added `RegisterZonesBatch()` for mass-spawning large object groups (e.g., asteroid fields) in a single pass.
 
 ### 3. Suspension & Landing Gear Refactoring (Live Build)
-* **POD Struct Caching:** Replaced runtime component array iterations in simulation ticks with flat TArray<FAetherGearData> POD structs initialized at BeginPlay.
+* **POD Struct Caching:** Replaced runtime component array iterations in simulation ticks with flat `TArray<FAetherGearData>` POD structs initialized at `BeginPlay`.
 * **Three-Stage Early-Exit Traces:** 
   1. *Altitude Exit:* Bypasses raycasts when gear is retracted or altitude is out of range.
-  2. *Hysteresis Center Probe:* Runs a single sphere trace along the ship's local Z-axis (activation <15m, deactivation >18m) before evaluating individual suspension components.
+  2. *Hysteresis Center Probe:* Runs a single sphere trace along the ship's local Z-axis (`bCenterProbeActive`: activation <15m, deactivation >18m) before evaluating individual suspension components.
   3. *POD Execution:* Executes short individual line traces per gear only when the center probe registers ground contact.
 * **Single-Pass Mass Scaling:** Removed duplicate pre-loop passes for gear counting; mass distribution scales directly via cached array size.
 
-### 4. Physics Simulation & Precision Fixes (Live Build)
-* **Rotation Matrix Stale State Fix:** Recalculates ActiveInverseRot in SimulationTick immediately after landing gear torque and collision deflection to ensure mouse aim and horizon leveling use updated local space.
-* **Visual Smoothing Fix:** Removed per-frame zeroing of SmoothingTranslationOffset in FinalizeSmoothingFrame to eliminate interpolation stutter; offset clearing is handled directly in TeleportTo().
-* **Penetration Resolution:** Fixed bStartPenetrating handling in SweepSimulation by driving displacement purely via impact normal without extra depth padding.
-* **Codebase Cleanup:** Completely removed obsolete ActiveGravitySources and ActiveLandingGears raw weak pointer arrays from UAetherMovementComponent.
+### 4. Input, Aiming & Precision Fixes (Live Build)
+* **Sensitivity & Clamped Aim Delta:** `UAetherAimDirectorComponent::AddAimInput` includes smooth sensitivity scaling and soft clamping to prevent rotational snaps during hitches without discarding user input.
+* **Dynamic Reconciliation Tolerances:** `FAetherSyncState::ShouldReconcile` dynamically queries `UAetherDeveloperSettings` (`ReconcileMaxPosError`, `ReconcileMaxRotError`) and logs telemetry via `RecordTelemetryEvent()`.
+* **Rotation Matrix Stale State Fix:** Recalculates local space vectors in `SimulationTick` immediately after landing gear torque and collision deflection to ensure mouse aim and horizon leveling use updated transforms.
+* **Visual Smoothing Fix:** Uses velocity-compensated dynamic error offset (`SmoothingTranslationOffset`) in `FinalizeSmoothingFrame()` to eliminate visual snapping; offset reset is driven directly inside `TeleportTo()`.
 
 ### 5. Developer Tooling & Simulation Diagnostics (Live Build)
-* **Dedicated Engine Settings (UAetherDeveloperSettings):** Integrated a developer settings panel into the engine for real-time diagnostic control and network emulation scenarios (Ideal, Bad WiFi, High Ping, Packet Loss Spikes).
-* **Visual 3D Sync Overlay (SAetherDebugOverlay):** Slate-based debug overlay providing real-time telemetry (Sim time in µs, G-Force, AOA, Net Lag, Bandwidth, Desync cm, Total Rollbacks) and 3D sync trails comparing local client trajectories against server prediction vectors.
+* **Dedicated Engine Settings (`UAetherDeveloperSettings`):** Integrated a developer settings panel into the engine (`Project Settings -> Kadmium Framework -> AETHER`) for real-time diagnostic control and 10 network emulation scenarios via `aether.net.scenario`.
+* **Visual 3D Sync Overlay (`SAetherDebugOverlay`):** Slate-based editor overlay providing real-time telemetry (Sim time in µs, G-Force, AOA, Net Lag, Bandwidth, Desync cm, Total Rollbacks) and 3D sync trails comparing local client trajectories against server prediction vectors.
 
 ---
 
@@ -47,7 +47,7 @@ The list below outlines key architectural differences between this public showca
 ### Extended Expansion (Funding Dependent - see [kadmium.dev/aether](https://www.kadmium.dev/dev-tech/ue-frameworks/aether) or [Gumroad](https://kadmium.gumroad.com/))
 Subject to securing additional development funding, planned architecture expansions include:
 
-* **Advanced Atmospheric & Turbulence Simulation:** Expanding UAetherGravityComponent and environmental handlers to support volumetric wind, dynamic turbulence, and weather-driven flight interference.
+* **Advanced Atmospheric & Turbulence Simulation:** Expanding `UAetherGravityComponent` and environmental handlers to support volumetric wind, dynamic turbulence, and weather-driven flight interference.
 * **Dedicated Ground Vehicle Simulation:** Extending Aether's NPP engine to handle wheeled and tracked vehicle physics, suspension dynamics, and surface traction under custom gravity fields.
 * **Advanced 6-DOF Character Movement:** A custom predicted character movement model built for high-mobility gameplay (featuring wall-running, thruster mechanics, and dynamic orientation).
 * **Dedicated VR Motion Comfort System:** VR-tailored camera stabilization, dynamic horizon-locking, and visual comfort anchors to eliminate motion sickness during aggressive high-G maneuvers in HMD cockpits.
