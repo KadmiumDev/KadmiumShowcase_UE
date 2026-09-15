@@ -22,7 +22,7 @@ For NDA-based source access or a formal architectural/implementation audit, plea
 
 ## Network Emulation & Profiling Results
 
-All stress tests were conducted with a **60 Hz dedicated server tick rate** using Unreal Engine's built-in packet simulation emulation and standard Network Prediction Plugin (NPP) reconciliation defaults.
+All stress tests were conducted with a **60 Hz dedicated server tick rate** |  **Ship max speed was 55,000cm/s** using Unreal Engine's built-in packet simulation emulation and standard Network Prediction Plugin (NPP) reconciliation defaults.
 
 | Scenario | 1-Way Latency / RTT | Packet Loss / Jitter / Reorder | Client Visual Experience | Network Prediction & Buffer Behavior |
 | :--- | :--- | :--- | :--- | :--- |
