@@ -41,7 +41,7 @@ The list below outlines key architectural differences between this public showca
 ## Future Roadmap
 
 ### Immediate Milestones
-* **Public Showcase Video:** A video showcasing network reconciliation, atmospheric flight, and 6-DOF physics on Wednesday 16 September - 14:00 CEST+1 (Sweden). Thereafter an in-depth technical breakdown video.
+* **Public Showcase Video:** https://youtu.be/szciROm9ppU
 * **Playable Test Demo:** A standalone compiled test environment executable for reviewers to evaluate flight feel and network handling directly.
 
 ### Extended Expansion (Funding Dependent - see [kadmium.dev/aether](https://www.kadmium.dev/dev-tech/ue-frameworks/aether) or [Gumroad](https://kadmium.gumroad.com/))

@@ -1,6 +1,6 @@
 ## Articles & Community Discussions
 * Read the full background story and technical write-up on DEV.to | https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20
-* A showcase video from the livebuild will release on wednesday 16 September - 14:00 CEST+1, Sweden.
+* Showcase Video : https://youtu.be/szciROm9ppU
 * A playable demo will release shortly after as soon as time permits.
 
 > [!IMPORTANT]
