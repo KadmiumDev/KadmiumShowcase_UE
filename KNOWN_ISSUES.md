@@ -43,8 +43,9 @@ The list below outlines key architectural differences between this public showca
 ### Immediate Milestones
 * **Public Showcase Video:** https://youtu.be/szciROm9ppU
 * **Playable Test Demo:** A standalone compiled test environment executable for reviewers to evaluate flight feel and network handling directly.
+* **Aether availablity:** The aether source code is available now on gumroad and stripe - https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26 or for studios/Enterprise that need extended licensing or custom architecture vistit https://www.kadmium.dev/services
 
-### Extended Expansion (Funding Dependent - see [kadmium.dev/aether](https://www.kadmium.dev/dev-tech/ue-frameworks/aether) or [Gumroad](https://kadmium.gumroad.com/))
+### Extended Expansion (Funding Dependent - see [kadmium.dev/aether](https://www.kadmium.dev/dev-tech/ue-frameworks/aether) or [Gumroad](https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26)
 Subject to securing additional development funding, planned architecture expansions include:
 
 * **Advanced Atmospheric & Turbulence Simulation:** Expanding `UAetherGravityComponent` and environmental handlers to support volumetric wind, dynamic turbulence, and weather-driven flight interference.
