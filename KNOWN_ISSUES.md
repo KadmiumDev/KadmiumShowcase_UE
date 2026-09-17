@@ -53,3 +53,33 @@ Subject to securing additional development funding, planned architecture expansi
 * **Advanced 6-DOF Character Movement:** A custom predicted character movement model built for high-mobility gameplay (featuring wall-running, thruster mechanics, and dynamic orientation).
 * **Dedicated VR Motion Comfort System:** VR-tailored camera stabilization, dynamic horizon-locking, and visual comfort anchors to eliminate motion sickness during aggressive high-G maneuvers in HMD cockpits.
 * **Console DevKit Hardening:** Direct testing and optimization across Console DevKits, including platform-specific hardware profiling, memory tuning, and native gamepad integration beyond basic wrappers.
+
+
+
+## Crucial Network Prediction Setup (DefaultNetworkPrediction.ini)
+
+IMPORTANT: I'm so sorry! I got too stuck in the live build! 
+To prevent client-server state desync and resimulation fights, your UE project must configure Config/DefaultNetworkPrediction.ini with the following parameters:
+
+[/Script/NetworkPrediction.NetworkPredictionSettings]
+PreferredTickingPolicy=Independent
+ReplicatedManagerClassOverride=/Script/NetworkPrediction.NetworkPredictionReplicatedManager
+FixedTickFrameRate=60
+bForceEngineFixTickForcePhysics=True
+SimulatedProxyNetworkLOD=Interpolated
+bEnableFixedTickSmoothing=True
+FixedTickInterpolationBufferedMS=100
+IndependentTickInterpolationBufferedMS=100
+IndependentTickInterpolationMaxBufferedMS=250
+FixedTickInputSendCount=6
+IndependentTickInputSendCount=6
+MaximumRemoteInputFaultLimit=6
+
+Why these specific flags matter:
+
+PreferredTickingPolicy=Independent (Critical): Decouples the simulation tick from both the render thread and standard engine tick groups. This prevents client and server timelines from fighting each other during framerate fluctuations.
+
+SimulatedProxyNetworkLOD=Interpolated & bEnableFixedTickSmoothing=True (Critical): Forces remote entities and simulated proxies (e.g., other players' ships) to smoothly interpolate between network state updates instead of snapping visually.
+
+IndependentTickInputSendCount=6: Sends 6 redundant historical input frames with every UDP packet. This is the core reason Aether absorbs up to 70% packet loss without suffering input starvation.
+

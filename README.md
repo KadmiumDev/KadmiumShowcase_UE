@@ -53,6 +53,8 @@ All stress tests were conducted with a **60 Hz dedicated server tick rate** | **
 
 ---
 
+
+
 # Aether Framework — C++ Architecture Showcase
 
 A deterministic, 6-DOF vehicle movement architecture built for Unreal Engine 5 using the experimental **Network Prediction Plugin (NPP)**.
@@ -129,6 +131,36 @@ To eliminate visual snapping at high speeds, `ShouldReconcile` checks squared di
 ### 4. Optimized Suspension System
 * Databased POD structs (`FAetherGearData`) cache suspension parameters to eliminate runtime component queries.
 * Uses a 3-stage early exit with altitude checks and a hysteresis center probe (`bCenterProbeActive`) to minimize line trace costs during NPP rollbacks.
+
+
+## Crucial Network Prediction Setup (DefaultNetworkPrediction.ini)
+
+IMPORTANT: To prevent client-server state desync and resimulation fights, your UE project must configure Config/DefaultNetworkPrediction.ini with the following parameters:
+
+[/Script/NetworkPrediction.NetworkPredictionSettings]
+PreferredTickingPolicy=Independent
+ReplicatedManagerClassOverride=/Script/NetworkPrediction.NetworkPredictionReplicatedManager
+FixedTickFrameRate=60
+bForceEngineFixTickForcePhysics=True
+SimulatedProxyNetworkLOD=Interpolated
+bEnableFixedTickSmoothing=True
+FixedTickInterpolationBufferedMS=100
+IndependentTickInterpolationBufferedMS=100
+IndependentTickInterpolationMaxBufferedMS=250
+FixedTickInputSendCount=6
+IndependentTickInputSendCount=6
+MaximumRemoteInputFaultLimit=6
+
+Why these specific flags matter:
+
+PreferredTickingPolicy=Independent (Critical): Decouples the simulation tick from both the render thread and standard engine tick groups. This prevents client and server timelines from fighting each other during framerate fluctuations.
+
+SimulatedProxyNetworkLOD=Interpolated & bEnableFixedTickSmoothing=True (Critical): Forces remote entities and simulated proxies (e.g., other players' ships) to smoothly interpolate between network state updates instead of snapping visually.
+
+IndependentTickInputSendCount=6: Sends 6 redundant historical input frames with every UDP packet. This is the core reason Aether absorbs up to 70% packet loss without suffering input starvation.
+
+
+
 
 ---
 
