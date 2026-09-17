@@ -4,14 +4,27 @@
 * A playable demo will release shortly after as soon as time permits.
 * **Aether availablity:** The aether source code is available now on gumroad and stripe - https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26 or for studios/Enterprise that need extended licensing or custom architecture vistit https://www.kadmium.dev/services
 
+---
+
+## Technical Advisory & Code Audits
+
+For engineering teams working on custom Unreal Engine 5 movement, Network Prediction Plugin (NPP) physics, or high-performance C++ architecture, direct advisory and repository audits are available:
+
+* **1-on-1 Advisory Call (1h):** Architecture Q&A and sanity checks for specific UE5 networking or simulation blockers.
+* **Async Code Audit:** Deep-dive analysis of repository bottlenecks, resimulation rollbacks, and memory layouts.
+* **Engineering Retainers & Custom Integration:** Dedicated C++ support and Aether framework integration for active production builds.
+
+Full service details, availability, and scheduling are available at **[kadmium.dev/services](https://www.kadmium.dev/services)** or via direct contact at **`legal@kadmium.dev`**.
+
 > [!IMPORTANT]
 > **Showcase & Intellectual Property Notice**
 > 
 > * **Not Open Source:** This repository is a **read-only architectural showcase** and proof-of-concept. It is not licensed for open-source use, distribution, or commercial integration.
 > * **Purpose:** Created to verify the existence and design of a production-ready 6-DOF movement system built on Unreal Engine 5's experimental **Network Prediction Plugin (NPP)**.
 > * **Code Availability:** All `.h` interfaces, state definitions, and pipeline setups are fully visible to demonstrate C++ code quality and memory layout. Simulation math inside `.cpp` files is stubbed. Full NDA-based source access is available for formal technical audits upon request (`legal@kadmium.dev`).
-
-* Made for Unreal Engine 5.7.4
+> * Made for Unreal Engine 5.7.4
+  
+---
 
 # Implementation Verification
 The public repository is intended as an architectural showcase and therefore does not expose the complete implementation.
