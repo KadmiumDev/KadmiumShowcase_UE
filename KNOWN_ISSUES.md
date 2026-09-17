@@ -2,6 +2,17 @@
 
 > **Note to Reviewers:** This public showcase repository demonstrates the high-level C++ architecture, API layout, state isolation, and Unreal Engine Network Prediction plugin integration. Proprietary tick physics, vector simulation math, and internal live-build optimizations are omitted or stubbed in the public showcase files in accordance with licensing agreements.
 
+## Technical Advisory & Code Audits
+
+For engineering teams working on custom Unreal Engine 5 movement, Network Prediction Plugin (NPP) physics, or high-performance C++ architecture, direct advisory and repository audits are available:
+
+* **1-on-1 Advisory Call (1h):** Architecture Q&A and sanity checks for specific UE5 networking or simulation blockers.
+* **Async Code Audit:** Deep-dive analysis of repository bottlenecks, resimulation rollbacks, and memory layouts.
+* **Engineering Retainers & Custom Integration:** Dedicated C++ support and Aether framework integration for active production builds.
+
+Full service details, availability, and scheduling are available at **[kadmium.dev/services](https://www.kadmium.dev/services)** or via direct contact at **`legal@kadmium.dev`**.
+
+
 ---
 
 ## Showcase vs. Live Build Differences & Active Refactoring
