@@ -3,7 +3,7 @@
 * Showcase Video : https://youtu.be/szciROm9ppU
 * A playable demo will release shortly after as soon as time permits.
 * **Aether availability:** The aether source code is available now on gumroad and stripe - https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26 or for studios/Enterprise that need extended licensing or custom architecture visit https://www.kadmium.dev/services
-*Feedback Q&A https://github.com/KadmiumDev/KadmiumShowcase_UE/discussions/3#discussion-10844693
+* Feedback Q&A https://github.com/KadmiumDev/KadmiumShowcase_UE/discussions/3#discussion-10844693
 
 ---
 
