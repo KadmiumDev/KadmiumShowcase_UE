@@ -1,6 +1,6 @@
-# Known Technical Debt & Architecture Roadmap
+# Architecture Scope & Proprietary Boundaries
 
-> **Note to Reviewers:** This public showcase repository demonstrates the high-level C++ architecture, API layout, state isolation, and Unreal Engine Network Prediction plugin integration. Proprietary tick physics, vector simulation math, and internal live-build optimizations are omitted or stubbed in the public showcase files in accordance with licensing agreements.
+> **Note to Reviewers:** This repository is an **architectural showcase** demonstrating high-level C++ structure, API layout, state isolation, and Unreal Engine Network Prediction plugin (NPP) integration. To comply with licensing and commercial protection, proprietary tick physics and vector simulation math inside `.cpp` files are stubbed or simplified. The `.h` interfaces, network state quantization, and developer tools are fully featured and represent the core framework design.
 
 ## Technical Advisory & Code Audits
 
@@ -12,66 +12,60 @@ For engineering teams working on custom Unreal Engine 5 movement, Network Predic
 
 Full service details, availability, and scheduling are available at **[kadmium.dev/services](https://www.kadmium.dev/services)** or via direct contact at **`legal@kadmium.dev`**.
 
+---
+
+## Included Architecture & Showcase Features
+
+This public mirror contains several robust systems designed to demonstrate code quality, memory management, and deterministic networking. The following features are actively included and verifiable within the repository's `.h` and `.cpp` files:
+
+### 1. Network Payload & Bandwidth Optimization
+* **Input Cmd Serialization & Quantization:** The `FAetherInputCmd::NetSerialize` function effectively compresses control axes (`ForwardCmd`, `RightCmd`, `UpCmd`, `PitchCmd`, `YawCmd`, `RollCmd`) down to 8-bit integers (`int8`) to minimize payload size.
+* **Bit-Packed Flags & Quantized Normal Aiming:** Booleans such as `bIsCoupledMode` and `bWantsLandingGear` are packed into a 2-bit field mask. Aim directions utilize `FVector_NetQuantizeNormal` for efficient replication.
+* **Deterministic Environment Parameters:** `GravityForce` and `EnvironmentDensity` are excluded from network serialization and are instead evaluated deterministically per-tick by the subsystem on both client and server.
+
+### 2. Gravity Subsystem & Deterministic Resolution
+* **Subsystem-Driven Gravity (`UAetherGravitySubsystem`):** Replaces expensive component overlap polling with a dedicated `UWorldSubsystem`. It supports both Spherical planets and Directional OBB (Oriented Bounding Box) volumes.
+* **Per-Frame Transform Caching & Batch Registration:** Utilizes `GFrameCounter` to cap transform updates for moving zones to once per frame. Features `RegisterZonesBatch()` for mass-spawning large object groups efficiently.
+
+### 3. Suspension & Landing Gear Refactoring
+* **POD Struct Caching:** Replaces runtime component array iterations during simulation ticks with flat `TArray<FAetherGearData>` POD structs, initialized during `BeginPlay` for optimal performance.
+
+### 4. Input, Aiming & Precision Fixes
+* **Dynamic Reconciliation Tolerances:** `FAetherSyncState::ShouldReconcile` dynamically queries `UAetherDeveloperSettings` (e.g., `ReconcileMaxPosError`, `ReconcileMaxRotError`) and logs telemetry data via `RecordTelemetryEvent()`.
+* **Visual Smoothing Fix:** Employs a velocity-compensated dynamic error offset (`SmoothingTranslationOffset`) within `FinalizeSmoothingFrame()` to eliminate visual snapping. The offset reset is directly managed inside `TeleportTo()`.
+
+### 5. Developer Tooling & Simulation Diagnostics
+* **Dedicated Engine Settings (`UAetherDeveloperSettings`):** Provides an integrated developer settings panel (`Project Settings -> Kadmium Framework -> AETHER`) allowing for real-time diagnostic control and network emulation scenarios via the `aether.net.scenario` console variable.
+* **Visual 3D Sync Overlay (`SAetherDebugOverlay`):** A custom Slate-based editor overlay that displays real-time telemetry, including simulation time in µs, G-Force, AOA, network lag, bandwidth, desync distance, and total rollbacks.
 
 ---
 
-## Showcase vs. Live Build Differences & Active Refactoring
+## Release Roadmap & Milestones
 
-The list below outlines key architectural differences between this public showcase mirror and the internal live build (Aether Live), alongside optimizations currently under active development in the internal codebase:
+### v1.0 Early Access Live (Core Completion & Final Refinements)
 
-### 1. Network Payload & Bandwidth Optimization (Live Build)
-* **Input Cmd Serialization & Quantization:** While the showcase uses uncompressed floats in `FAetherInputCmd`, the live build quantizes control axes (`ForwardCmd`, `RightCmd`, `UpCmd`, `PitchCmd`, `YawCmd`, `RollCmd`) to 8-bit integers (`int8`) in `NetSerialize`.
-* **Bit-Packed Flags & Quantized Normal Aiming:** Booleans (`bIsCoupledMode`, `bWantsLandingGear`) are bit-packed into a 2-bit field mask, and the aim direction uses `FVector_NetQuantizeNormal` instead of raw vectors.
-* **Deterministic Environment Parameters:** `GravityForce` and `EnvironmentDensity` are removed from network serialization and evaluated deterministically per-tick via the gravity subsystem across both client and server.
+* **Dynamic Relative Docking & Landing (`In Progress`):** Player-to-Player and Player-to-Environment relative docking. Enables smooth landings and zero-gravity attachment to moving stations, hangars, and capital ships.
+* **Atmospheric Breaches & Vacuum Mechanics (`In Progress`):** Simulated environment parameters handling hull breaches, pressure drops, and localized atmospheric transitions between space vacuum and planetary gravity.
+* **Direct Parameter & Variable Injection (`Completed`):** Supports runtime Parameter Overrides via Flux Framework C++ True Reflection or direct component setters. Standalone native wrappers are being polished to allow seamless variable injection without requiring the Flux Stat system.
+* **Core Deterministic NPP Flight Engine (`Completed`):** 6-DOF Newtonian flight model, planetary gravity fields, raycast suspension, and prediction reconciliation built natively on the Network Prediction Plugin.
 
-### 2. Gravity Subsystem & Deterministic Resolution (Live Build)
-* **Subsystem-Driven Gravity (`UAetherGravitySubsystem`):** Showcase uses component overlap tracking. The live build utilizes a dedicated `UWorldSubsystem` that eliminates component overlap polling and supports both Spherical planets and Directional OBB (Oriented Bounding Box) volumes.
-* **Direct SyncState Lookup:** Pulls world transforms directly from `UAetherMovementComponent`'s `FAetherSyncState` to maintain strict determinism during network prediction rollbacks.
-* **Per-Frame Transform Caching & Batch Registration:** Implemented `GFrameCounter` checks to cap transform updates for moving zones to once per frame and added `RegisterZonesBatch()` for mass-spawning large object groups (e.g., asteroid fields) in a single pass.
+### Funding Dependent Expansions (Future Pipeline)
 
-### 3. Suspension & Landing Gear Refactoring (Live Build)
-* **POD Struct Caching:** Replaced runtime component array iterations in simulation ticks with flat `TArray<FAetherGearData>` POD structs initialized at `BeginPlay`.
-* **Three-Stage Early-Exit Traces:** 
-  1. *Altitude Exit:* Bypasses raycasts when gear is retracted or altitude is out of range.
-  2. *Hysteresis Center Probe:* Runs a single sphere trace along the ship's local Z-axis (`bCenterProbeActive`: activation <15m, deactivation >18m) before evaluating individual suspension components.
-  3. *POD Execution:* Executes short individual line traces per gear only when the center probe registers ground contact.
-* **Single-Pass Mass Scaling:** Removed duplicate pre-loop passes for gear counting; mass distribution scales directly via cached array size.
-
-### 4. Input, Aiming & Precision Fixes (Live Build)
-* **Sensitivity & Clamped Aim Delta:** `UAetherAimDirectorComponent::AddAimInput` includes smooth sensitivity scaling and soft clamping to prevent rotational snaps during hitches without discarding user input.
-* **Dynamic Reconciliation Tolerances:** `FAetherSyncState::ShouldReconcile` dynamically queries `UAetherDeveloperSettings` (`ReconcileMaxPosError`, `ReconcileMaxRotError`) and logs telemetry via `RecordTelemetryEvent()`.
-* **Rotation Matrix Stale State Fix:** Recalculates local space vectors in `SimulationTick` immediately after landing gear torque and collision deflection to ensure mouse aim and horizon leveling use updated transforms.
-* **Visual Smoothing Fix:** Uses velocity-compensated dynamic error offset (`SmoothingTranslationOffset`) in `FinalizeSmoothingFrame()` to eliminate visual snapping; offset reset is driven directly inside `TeleportTo()`.
-
-### 5. Developer Tooling & Simulation Diagnostics (Live Build)
-* **Dedicated Engine Settings (`UAetherDeveloperSettings`):** Integrated a developer settings panel into the engine (`Project Settings -> Kadmium Framework -> AETHER`) for real-time diagnostic control and 10 network emulation scenarios via `aether.net.scenario`.
-* **Visual 3D Sync Overlay (`SAetherDebugOverlay`):** Slate-based editor overlay providing real-time telemetry (Sim time in µs, G-Force, AOA, Net Lag, Bandwidth, Desync cm, Total Rollbacks) and 3D sync trails comparing local client trajectories against server prediction vectors.
+* **6-DOF Character Movement Model (`Planned`):** Predicted character movement model built for high-mobility gameplay, featuring wall-running, EVA thruster controls, and dynamic orientation.
+* **Dedicated Ground Vehicle Physics (`Planned`):** Extending the NPP engine to handle wheeled and tracked vehicle simulation, surface traction, and suspension under custom planetary gravity fields.
+* **Advanced Weather & Environmental Simulation (`Planned`):** Volumetric atmospheric wind, dynamic turbulence systems, and environmental storms affecting flight stability and aerodynamic drag.
+* **Multi-Crew Systems & VR Motion Comfort (`Planned`):** Multi-crew station delegation and VR-tailored camera stabilization with dynamic horizon-locking to eliminate motion sickness during high-G maneuvers.
+* **Advanced Aerodynamic Stress & Structural Failure (`Planned`):**
+  * *Current Capability:* Aether calculates real-time `CurrentGForce` and Angle of Attack (AoA) directly in the core simulation tick, which can already be fed into the Kinetix Framework to trigger procedural mesh destruction upon exceeding stress thresholds.
+  * *Planned Dedicated Expansion:* Dedicated per-wing / per-surface aerodynamic load mapping. Calculates localized pressure distribution across individual airframe components (e.g., extreme high-speed pitch pulling wing-root snap) to trigger procedural structural tearing and partial airframe disintegration.
 
 ---
-
-## Future Roadmap
-
-### Immediate Milestones
-* **Public Showcase Video:** https://youtu.be/szciROm9ppU
-* **Playable Test Demo:** A standalone compiled test environment executable for reviewers to evaluate flight feel and network handling directly.
-* **Aether availablity:** The aether source code is available now on gumroad and stripe - https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26 or for studios/Enterprise that need extended licensing or custom architecture vistit https://www.kadmium.dev/services
-
-### Extended Expansion (Funding Dependent - see [kadmium.dev/aether](https://www.kadmium.dev/dev-tech/ue-frameworks/aether) or [Gumroad](https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26)
-Subject to securing additional development funding, planned architecture expansions include:
-
-* **Advanced Atmospheric & Turbulence Simulation:** Expanding `UAetherGravityComponent` and environmental handlers to support volumetric wind, dynamic turbulence, and weather-driven flight interference.
-* **Dedicated Ground Vehicle Simulation:** Extending Aether's NPP engine to handle wheeled and tracked vehicle physics, suspension dynamics, and surface traction under custom gravity fields.
-* **Advanced 6-DOF Character Movement:** A custom predicted character movement model built for high-mobility gameplay (featuring wall-running, thruster mechanics, and dynamic orientation).
-* **Dedicated VR Motion Comfort System:** VR-tailored camera stabilization, dynamic horizon-locking, and visual comfort anchors to eliminate motion sickness during aggressive high-G maneuvers in HMD cockpits.
-* **Console DevKit Hardening:** Direct testing and optimization across Console DevKits, including platform-specific hardware profiling, memory tuning, and native gamepad integration beyond basic wrappers.
-
-
 
 ## Crucial Network Prediction Setup (DefaultNetworkPrediction.ini)
 
-IMPORTANT: I'm so sorry! I got too stuck in the live build! 
-To prevent client-server state desync and resimulation fights, your UE project must configure Config/DefaultNetworkPrediction.ini with the following parameters:
+**IMPORTANT:** To prevent client-server state desync and resimulation fights, your UE project must configure `Config/DefaultNetworkPrediction.ini` with the following parameters:
 
+```ini
 [/Script/NetworkPrediction.NetworkPredictionSettings]
 PreferredTickingPolicy=Independent
 ReplicatedManagerClassOverride=/Script/NetworkPrediction.NetworkPredictionReplicatedManager
@@ -85,12 +79,10 @@ IndependentTickInterpolationMaxBufferedMS=250
 FixedTickInputSendCount=6
 IndependentTickInputSendCount=6
 MaximumRemoteInputFaultLimit=6
+```
 
-Why these specific flags matter:
+**Why these specific flags matter:**
 
-PreferredTickingPolicy=Independent (Critical): Decouples the simulation tick from both the render thread and standard engine tick groups. This prevents client and server timelines from fighting each other during framerate fluctuations.
-
-SimulatedProxyNetworkLOD=Interpolated & bEnableFixedTickSmoothing=True (Critical): Forces remote entities and simulated proxies (e.g., other players' ships) to smoothly interpolate between network state updates instead of snapping visually.
-
-IndependentTickInputSendCount=6: Sends 6 redundant historical input frames with every UDP packet. This is the core reason Aether absorbs up to 70% packet loss without suffering input starvation.
-
+* **`PreferredTickingPolicy=Independent` (Critical):** Decouples the simulation tick from both the render thread and standard engine tick groups. This prevents client and server timelines from fighting each other during framerate fluctuations.
+* **`SimulatedProxyNetworkLOD=Interpolated` & `bEnableFixedTickSmoothing=True` (Critical):** Forces remote entities and simulated proxies (e.g., other players' ships) to smoothly interpolate between network state updates instead of snapping visually.
+* **`IndependentTickInputSendCount=6`:** Sends 6 redundant historical input frames with every UDP packet. This is the core reason Aether absorbs up to 70% packet loss without suffering input starvation.

@@ -2,7 +2,7 @@
 * Read the full background story and technical write-up on DEV.to | https://dev.to/kadmium/aether-framework-c-architecture-showcase-2f20
 * Showcase Video : https://youtu.be/szciROm9ppU
 * A playable demo will release shortly after as soon as time permits.
-* **Aether availablity:** The aether source code is available now on gumroad and stripe - https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26 or for studios/Enterprise that need extended licensing or custom architecture vistit https://www.kadmium.dev/services
+* **Aether availability:** The aether source code is available now on gumroad and stripe - https://kadmium.gumroad.com/l/AetherFramework/aetherlaunch26 or for studios/Enterprise that need extended licensing or custom architecture visit https://www.kadmium.dev/services
 
 ---
 
